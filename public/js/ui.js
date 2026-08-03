@@ -210,85 +210,23 @@ export function hideCallOut() {
 // -------------------------------------------------------- punição: poções
 
 /**
- * Bandeja de poções do perdedor. Só quem vai beber consegue clicar.
- * @param {{name:string, potions:Array, total:number, isMe:boolean, canPick:boolean}} info
- * @param {(potionId:string)=>void} onPick
+ * Aviso da punição por poção. As bandejas ficam na mesa em 3D o jogo inteiro,
+ * então aqui só existe um texto que **não** bloqueia o clique na mesa.
+ *
+ * @param {{title:string, sub:string, isMe?:boolean, state?:string, picking?:boolean}} info
  */
-/** Trava a bandeja assim que uma poção é escolhida — um clique, uma escolha. */
-let potionLocked = false;
-
-export function showPotions({ name, potions, total, isMe, canPick }, onPick) {
-  const overlay = $('#potion-overlay');
-  const who = overlay.querySelector('.potion-who');
-  const sub = overlay.querySelector('.potion-sub');
-  const tray = $('#potion-tray');
-
-  potionLocked = false;
-  who.textContent = isMe ? 'Escolha o seu destino' : `${name} vai beber`;
-  sub.textContent = isMe
-    ? `${potions.length} de ${total} poções na bandeja — uma delas está envenenada.`
-    : `${potions.length} de ${total} poções na bandeja. Torça pela sorte alheia… ou não.`;
-
-  tray.innerHTML = '';
-  potions.forEach((potion, i) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = `potion${canPick ? ' pickable' : ''}`;
-    button.style.setProperty('--liquid', potion.color);
-    button.dataset.potionId = potion.id;
-    button.innerHTML = `<span class="flask"><span class="liquid"></span></span>
-                        <span class="potion-num">${i + 1}</span>`;
-    if (canPick) {
-      button.addEventListener('click', () => {
-        if (potionLocked) return;
-        potionLocked = true;
-        onPick(potion.id);
-      });
-    }
-    tray.appendChild(button);
-  });
-
-  overlay.classList.remove('hidden');
+export function showPunishPrompt({ title, sub, isMe = false, state = '', picking = false }) {
+  const prompt = $('#punish-prompt');
+  prompt.querySelector('.punish-title').textContent = title;
+  prompt.querySelector('.punish-sub').textContent = sub;
+  prompt.className = `punish-prompt${isMe ? ' is-you' : ''}${state ? ` ${state}` : ''}`;
+  // Enquanto o jogador escolhe, a mão sai da frente das poções.
+  $('#screen-game').classList.toggle('picking-potion', picking);
 }
 
-/** Marca a poção escolhida e entra no suspense antes do veredito. */
-export function markPotionChosen(potionId, drinkerName, isMe) {
-  const overlay = $('#potion-overlay');
-  if (overlay.classList.contains('hidden')) return;
-
-  potionLocked = true;
-  for (const button of overlay.querySelectorAll('.potion')) button.classList.remove('pickable');
-
-  const chosen = overlay.querySelector(`.potion[data-potion-id="${CSS.escape(potionId)}"]`);
-  if (chosen) chosen.classList.add('chosen', 'drinking');
-
-  overlay.querySelector('.potion-who').textContent = isMe ? 'Você bebe…' : `${drinkerName} bebe…`;
-  overlay.querySelector('.potion-sub').textContent = 'A mesa inteira prende a respiração.';
-}
-
-/** Revela o resultado depois do suspense. */
-export function resolvePotion({ potionId, fatal, name, remaining, isMe }) {
-  const overlay = $('#potion-overlay');
-  if (overlay.classList.contains('hidden')) return;
-
-  const chosen = overlay.querySelector(`.potion[data-potion-id="${CSS.escape(potionId)}"]`);
-  if (chosen) {
-    chosen.classList.remove('drinking');
-    chosen.classList.add(fatal ? 'poison' : 'safe');
-    if (!fatal) chosen.classList.add('drunk');
-  }
-
-  overlay.querySelector('.potion-who').textContent = fatal
-    ? (isMe ? 'Era essa.' : `${name} escolheu errado.`)
-    : (isMe ? 'Você sobreviveu.' : `${name} sobreviveu.`);
-
-  overlay.querySelector('.potion-sub').textContent = fatal
-    ? 'Veneno. A cabeça bate na mesa e não levanta mais.'
-    : `Água com açúcar. Restam ${remaining} poç${remaining === 1 ? 'ão' : 'ões'} na bandeja.`;
-}
-
-export function hidePotions() {
-  $('#potion-overlay').classList.add('hidden');
+export function hidePunishPrompt() {
+  $('#punish-prompt').classList.add('hidden');
+  $('#screen-game').classList.remove('picking-potion');
 }
 
 export function addLog(logEl, text, kind = '') {

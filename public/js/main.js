@@ -7,9 +7,9 @@ import { World } from './world.js';
 import { sfx, setMuted, isMuted } from './audio.js';
 import { announceDrink, announceLiar, announcePlay, primeVoice, setVoiceEnabled, voiceAvailable } from './voice.js';
 import {
-  $, addChat, addLog, claimText, escapeHtml, flashBang, hideCallOut, hidePotions, hideReveal, hideRoulette,
-  markPotionChosen, RANK_PLURAL, renderAvatarPicker, renderHand, renderLeaderboard, renderLobbySeats,
-  renderPlayers, resolvePotion, resolveRoulette, showCallOut, showPotions, showReveal, showRoulette, toast,
+  $, addChat, addLog, claimText, escapeHtml, flashBang, hideCallOut, hidePunishPrompt, hideReveal,
+  hideRoulette, RANK_PLURAL, renderAvatarPicker, renderHand, renderLeaderboard, renderLobbySeats,
+  renderPlayers, resolveRoulette, showCallOut, showPunishPrompt, showReveal, showRoulette, toast,
 } from './ui.js';
 import { AVATAR_IDS } from './avatars.js';
 
@@ -554,10 +554,14 @@ function syncWorld(state) {
   if (app.worldSignature !== signature) {
     app.worldSignature = signature;
     app.world.setup(state.players, mySeat);
+    // No modo poções as bandejas ficam na mesa a partida inteira, uma na
+    // frente de cada jogador, para todo mundo acompanhar quantas sobraram.
+    if (state.punishment?.mode === 'potions') app.world.buildTrays(state.players);
   }
 
   app.world.syncPlayers(state);
   app.world.syncPile(state);
+  app.world.syncTrays(state);
 }
 
 // ====================================================== EVENTOS DO JOGO
@@ -593,9 +597,11 @@ function handleEvent(event) {
       app.selected.clear();
       hideReveal();
       hideRoulette();
-      hidePotions();
+      hidePunishPrompt();
       hideCallOut();
-      app.world?.clearTray();
+      app.world?.focusTray(null);
+      app.world?.disablePotionPicking();
+      app.world?.releaseAllDeaths(); // rede de segurança contra queda presa
       addLog(log, `— Rodada ${event.round} — Tema da Mesa: ${RANK_PLURAL[event.tableCard]} —`, 'round');
       sfx.roundStart();
       sfx.deal();
@@ -637,15 +643,28 @@ function handleEvent(event) {
       const isMe = event.playerId === app.seatId;
 
       if (event.mode === 'potions') {
-        app.world?.showTray(event.playerId, event.potions);
-        showPotions(
-          { name: event.playerName, potions: event.potions, total: event.total, isMe, canPick: isMe },
-          (potionId) => {
+        // A bandeja já está na mesa desde o começo: aqui só destacamos a dele
+        // e liberamos o clique para quem vai beber.
+        app.world?.focusTray(event.playerId);
+        if (isMe) {
+          const pick = (potionId) => {
             app.socket.emit('game:punish', { potionId }, (res) => {
-              if (!res?.ok) toast(res?.error || 'Não deu para beber essa.', { error: true });
+              if (res?.ok) return;
+              toast(res?.error || 'Não deu para beber essa.', { error: true });
+              // Devolve o clique para o jogador tentar outro frasco.
+              app.world?.enablePotionPicking(event.playerId, pick);
             });
-          },
-        );
+          };
+          app.world?.enablePotionPicking(event.playerId, pick);
+        }
+        showPunishPrompt({
+          title: isMe ? 'Escolha uma poção na mesa' : `${event.playerName} vai beber`,
+          sub: isMe
+            ? `Clique num dos ${event.potions.length} frascos à sua frente. Um deles está envenenado.`
+            : `${event.potions.length} de ${event.total} poções ainda na bandeja dele.`,
+          isMe,
+          picking: isMe,
+        });
         addLog(log, `${event.playerName} encara a bandeja de poções…`, 'danger');
       } else {
         showRoulette({
@@ -665,30 +684,47 @@ function handleEvent(event) {
       const isMe = event.playerId === app.seatId;
 
       if (event.mode === 'potions') {
+        // O servidor já marcou a morte, mas o avatar só pode tombar depois do
+        // veredito — senão ele cai antes de a poção ser revelada.
+        if (event.fatal) app.world?.holdDeath(event.playerId);
+
         // 1) Escolha feita: o gole começa e a mesa prende a respiração.
-        markPotionChosen(event.potionId, event.playerName, isMe);
-        app.world?.drinkPotion(event.potionId);
+        app.world?.enablePotionPicking(null);
+        app.world?.drinkPotion(event.playerId, event.potionId);
         announceDrink();
         sfx.select();
+        showPunishPrompt({
+          title: isMe ? 'Você bebe…' : `${event.playerName} bebe…`,
+          sub: 'A mesa inteira prende a respiração.',
+          isMe,
+          state: 'suspense',
+        });
 
-        // 2) Suspense, e só então o veredito.
+        // 2) Suspense, e só então o veredito — e só aí ele cai (ou não).
         schedule(DRINK_MS + SUSPENSE_MS, () => {
-          resolvePotion({
-            potionId: event.potionId,
-            fatal: event.fatal,
-            name: event.playerName,
-            remaining: event.remaining,
-            isMe,
-          });
           app.world?.finishDrink(event.fatal);
+          app.world?.focusTray(null);
 
           if (event.fatal) {
+            app.world?.releaseDeath(event.playerId); // agora sim: cara na mesa
             sfx.gunshot();
             flashBang();
             app.world?.shake(0.7);
+            showPunishPrompt({
+              title: isMe ? 'Era essa.' : `${event.playerName} escolheu errado.`,
+              sub: 'Veneno. A cabeça bate na mesa e não levanta mais.',
+              isMe,
+              state: 'fatal',
+            });
             addLog(log, `GLUP… ${event.playerName} bebeu a poção envenenada.`, 'danger');
           } else {
             sfx.click();
+            showPunishPrompt({
+              title: isMe ? 'Você sobreviveu.' : `${event.playerName} sobreviveu.`,
+              sub: `Água com açúcar. Restam ${event.remaining} poç${event.remaining === 1 ? 'ão' : 'ões'} na bandeja dele.`,
+              isMe,
+              state: 'safe',
+            });
             addLog(log, `${event.playerName} bebeu e continua de pé (${event.remaining} restante${event.remaining === 1 ? '' : 's'}).`, 'good');
           }
         });
@@ -712,7 +748,7 @@ function handleEvent(event) {
     case 'eliminated': {
       schedule(1200, () => {
         hideRoulette();
-        hidePotions();
+        hidePunishPrompt();
       });
       break;
     }
@@ -725,8 +761,8 @@ function handleEvent(event) {
     case 'round:end': {
       schedule(1400, () => {
         hideRoulette();
-        hidePotions();
-        app.world?.clearTray();
+        hidePunishPrompt();
+        app.world?.focusTray(null);
       });
       break;
     }
@@ -734,9 +770,9 @@ function handleEvent(event) {
     case 'game:over': {
       schedule(1200, () => {
         hideRoulette();
-        hidePotions();
+        hidePunishPrompt();
         hideReveal();
-        app.world?.clearTray();
+        app.world?.focusTray(null);
 
         const won = event.winnerId === app.seatId;
         $('#gameover-title').textContent = won ? 'Você sobreviveu' : 'Fim de jogo';
@@ -849,9 +885,11 @@ function initSocket() {
     app.worldSignature = null;
     hideReveal();
     hideRoulette();
-    hidePotions();
+    hidePunishPrompt();
     hideCallOut();
-    app.world?.clearTray();
+    app.world?.focusTray(null);
+    app.world?.disablePotionPicking();
+    app.world?.releaseAllDeaths();
     $('#gameover-overlay').classList.add('hidden');
     $('#log').innerHTML = '';
     showScreen('lobby');
