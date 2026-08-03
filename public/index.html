@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mesa do Mentiroso</title>
+<link rel="stylesheet" href="/css/style.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🃏</text></svg>" />
+<script src="/socket.io/socket.io.js"></script>
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/three.module.js" } }
+</script>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<!-- ============================ TELA INICIAL ============================ -->
+<section id="screen-home" class="screen">
+  <div class="home-card">
+    <h1>Mesa do <span>Mentiroso</span></h1>
+    <p class="tagline">Baixe as cartas. Minta com convicção. Reze pela câmara vazia.</p>
+
+    <label class="field">
+      <span>Seu nome</span>
+      <input id="input-name" type="text" maxlength="16" placeholder="Como te chamam no bar?" autocomplete="off" />
+    </label>
+
+    <div class="field">
+      <span>Escolha seu personagem</span>
+      <div id="avatar-picker" class="avatar-picker"></div>
+    </div>
+
+    <div class="home-actions">
+      <div class="action-block">
+        <h2>Criar uma mesa</h2>
+        <div class="size-picker">
+          <button class="size-btn is-active" data-size="4">4 jogadores</button>
+          <button class="size-btn" data-size="6">6 jogadores</button>
+        </div>
+        <button id="btn-create" class="btn btn-primary">Abrir a mesa</button>
+      </div>
+
+      <div class="action-divider"><span>ou</span></div>
+
+      <div class="action-block">
+        <h2>Entrar numa mesa</h2>
+        <input id="input-code" class="code-input" type="text" maxlength="4" placeholder="CÓDIGO" autocomplete="off" />
+        <button id="btn-join" class="btn">Sentar à mesa</button>
+      </div>
+    </div>
+
+    <p id="home-error" class="error-line"></p>
+
+    <details class="rules">
+      <summary>Como se joga</summary>
+      <ul>
+        <li>O baralho só tem <b>Ases, Reis, Damas e Coringas</b>. Coringa vale qualquer carta.</li>
+        <li>Cada rodada tem um <b>Tema da Mesa</b> (ex.: Rodada do Rei) e todo mundo recebe 5 cartas.</li>
+        <li>Na sua vez, baixe de <b>1 a 5 cartas viradas para baixo</b> afirmando que são todas do tema.</li>
+        <li>Só o <b>jogador seguinte</b> pode gritar <b>MENTIROSO</b> — ou baixar cartas e empurrar a dúvida adiante.</li>
+        <li>No desafio as cartas viram: mentiu, o mentiroso paga; era verdade, o acusador paga.</li>
+        <li>Quem paga aponta o revólver para si e puxa o gatilho. Seis câmaras, uma bala. Boa sorte.</li>
+      </ul>
+    </details>
+  </div>
+</section>
+
+<!-- ================================ LOBBY ============================== -->
+<section id="screen-lobby" class="screen hidden">
+  <div class="home-card">
+    <h1 class="lobby-title">Sala <span id="lobby-code">----</span></h1>
+    <p class="tagline">Mande esse código para a galera. A partida começa quando a mesa encher.</p>
+
+    <div class="size-picker" id="lobby-size">
+      <button class="size-btn" data-size="4">Mesa de 4</button>
+      <button class="size-btn" data-size="6">Mesa de 6</button>
+    </div>
+
+    <ul id="lobby-seats" class="lobby-seats"></ul>
+
+    <div class="lobby-actions">
+      <button id="btn-add-bot" class="btn">+ Adicionar bot</button>
+      <button id="btn-start" class="btn btn-primary">Começar a partida</button>
+    </div>
+    <p id="lobby-hint" class="hint"></p>
+    <p id="lobby-error" class="error-line"></p>
+  </div>
+</section>
+
+<!-- ================================ JOGO =============================== -->
+<section id="screen-game" class="screen-overlay hidden">
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="pill pill-room">Sala <b id="hud-room">----</b></span>
+      <span class="pill">Rodada <b id="hud-round">1</b></span>
+    </div>
+    <div id="hud-theme" class="theme-badge">
+      <span class="theme-label">Tema da Mesa</span>
+      <strong id="hud-theme-value">—</strong>
+    </div>
+    <div class="topbar-right">
+      <button id="btn-mute" class="icon-btn" title="Ligar/desligar som">🔊</button>
+      <button id="btn-leave" class="icon-btn" title="Sair da mesa">⏻</button>
+    </div>
+  </header>
+
+  <div id="turn-banner" class="turn-banner"></div>
+
+  <aside class="sidepanel">
+    <div class="panel-head">Histórico</div>
+    <div id="log" class="log"></div>
+    <div class="chat">
+      <div id="chat-messages" class="chat-messages"></div>
+      <input id="chat-input" type="text" maxlength="200" placeholder="Falar com a mesa…" autocomplete="off" />
+    </div>
+  </aside>
+
+  <div id="players-strip" class="players-strip"></div>
+
+  <footer class="hud">
+    <div id="hand" class="hand"></div>
+    <div class="hud-actions">
+      <button id="btn-challenge" class="btn btn-danger" disabled>MENTIROSO!</button>
+      <button id="btn-play" class="btn btn-primary" disabled>Baixar cartas</button>
+    </div>
+  </footer>
+
+  <!-- Sobreposições dramáticas -->
+  <div id="reveal-overlay" class="reveal-overlay hidden">
+    <div class="reveal-title"></div>
+    <div class="reveal-cards"></div>
+    <div class="reveal-verdict"></div>
+  </div>
+
+  <div id="roulette-overlay" class="roulette-overlay hidden">
+    <div class="roulette-box">
+      <div class="roulette-who"></div>
+      <div class="cylinder"><div class="cylinder-inner"></div></div>
+      <div class="roulette-sub"></div>
+      <button id="btn-pull" class="btn btn-danger hidden">PUXAR O GATILHO</button>
+    </div>
+  </div>
+
+  <div id="gameover-overlay" class="gameover-overlay hidden">
+    <div class="home-card">
+      <h1 id="gameover-title">Fim de jogo</h1>
+      <p id="gameover-sub" class="tagline"></p>
+      <button id="btn-again" class="btn btn-primary">Voltar ao lobby</button>
+    </div>
+  </div>
+
+  <div id="flash" class="flash"></div>
+  <div id="toast" class="toast hidden"></div>
+</section>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

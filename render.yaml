@@ -1,0 +1,15 @@
+# Deploy automático no Render (https://render.com).
+# Com este arquivo no repositório, o Render lê tudo sozinho: basta apontar
+# para o repo em "New +" > "Blueprint".
+services:
+  - type: web
+    name: mesa-do-mentiroso
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 20
