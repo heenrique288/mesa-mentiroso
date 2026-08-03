@@ -85,18 +85,49 @@ public/
     audio.js     Efeitos sonoros sintetizados.
 ```
 
-## Jogando pela internet
+## Publicando na internet
 
-O jeito mais simples, sem configurar nada no roteador, é abrir um túnel para a sua porta
-3000 e mandar o link gerado para a galera:
+O jogo precisa de um servidor Node rodando **com WebSocket** — não dá para hospedar em
+lugares de site estático (GitHub Pages, Netlify Drop). Duas receitas:
+
+### A) Agora, sem criar conta (link temporário)
+
+Deixe `npm start` rodando e, em outro terminal, abra um túnel para a sua porta 3000:
 
 ```bash
-npx localtunnel --port 3000
-# ou, se tiver o Cloudflare Tunnel:  cloudflared tunnel --url http://localhost:3000
+npx cloudflared tunnel --url http://localhost:3000
 ```
 
-Para hospedar de verdade, qualquer serviço que rode Node com WebSocket serve (Render,
-Railway, Fly.io). O servidor respeita a variável de ambiente `PORT`.
+Ele imprime um endereço `https://algo-aleatorio.trycloudflare.com`. Mande esse link para a
+galera e pronto. O link vive enquanto o comando e o seu PC estiverem ligados.
+
+> Alternativa: `npx localtunnel --port 3000` (pede uma senha na primeira visita, que é o
+> IP público mostrado por `curl https://loca.lt/mytunnelpassword`).
+
+### B) Link permanente (Render, plano gratuito)
+
+O repositório já vem com [`render.yaml`](render.yaml), então o Render se configura sozinho.
+
+1. Suba o código para o GitHub (repositório **privado** já serve):
+   ```bash
+   git remote add origin https://github.com/SEU-USUARIO/mesa-do-mentiroso.git
+   git push -u origin main
+   ```
+2. Em [render.com](https://render.com), entre com a conta do GitHub.
+3. **New +** → **Blueprint** → escolha o repositório → **Apply**.
+4. Em ~2 minutos sai a URL: `https://mesa-do-mentiroso.onrender.com`. É esse link que você
+   manda no grupo.
+
+A cada `git push` o Render publica a nova versão sozinho.
+
+**O que esperar do plano gratuito:** a instância dorme após ~15 minutos sem ninguém
+acessando, e a primeira visita depois disso demora ~50 segundos para responder. Enquanto
+dorme, **as salas abertas são perdidas** (o estado das partidas fica na memória). Combine
+de todo mundo entrar junto, ou peça para alguém abrir o link uns minutos antes. Para
+evitar o modo ocioso, aponte um monitor gratuito (UptimeRobot, cron-job.org) para
+`https://sua-url.onrender.com/healthz` a cada 10 minutos.
+
+Railway, Fly.io e Koyeb funcionam igual — todos leem o `npm start` e a variável `PORT`.
 
 ## Ajustes rápidos
 
