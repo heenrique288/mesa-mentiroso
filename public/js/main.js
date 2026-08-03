@@ -491,7 +491,7 @@ function renderGame() {
     ? `Modo poções — bandeja de ${state.punishment.potionCount}, uma envenenada`
     : 'Modo revólver — 6 câmaras, 1 bala';
 
-  renderPlayers($('#players-strip'), state, app.seatId);
+  renderPlayers($('#players-strip'), state, app.seatId, (id) => !!app.world?.isDeathHeld(id));
   renderHand($('#hand'), hand, {
     selected: app.selected,
     tableCard: state.tableCard,
@@ -706,7 +706,9 @@ function handleEvent(event) {
           app.world?.focusTray(null);
 
           if (event.fatal) {
-            app.world?.releaseDeath(event.playerId); // agora sim: cara na mesa
+            // Agora sim, tudo junto: cara na mesa, placa e painel viram "eliminado".
+            app.world?.releaseDeath(event.playerId);
+            renderGame();
             sfx.gunshot();
             flashBang();
             app.world?.shake(0.7);

@@ -283,6 +283,7 @@ export class World {
 
   /** Atualiza placas, brilho do turno e opacidade dos eliminados. */
   syncPlayers(state) {
+    this.lastState = state; // guardado para redesenhar ao liberar uma morte
     for (const seat of this.seats) {
       const player = state.players.find((p) => p.id === seat.playerId);
       if (!player) continue;
@@ -291,10 +292,18 @@ export class World {
       seat.isTurn = isTurn;
       seat.marker.material.opacity = isTurn ? 0.85 : 0;
 
-      if (seat.plate) {
+      // Enquanto a morte está retida, a placa não pode entregar o resultado:
+      // ela fica congelada no último estado "vivo" até o veredito aparecer.
+      const held = this.heldDeaths.has(player.id);
+
+      if (seat.plate && !held) {
+        const status = player.potions
+          ? `${player.potionsLeft} poç${player.potionsLeft === 1 ? 'ão' : 'ões'}`
+          : `câmara ${Math.min(player.pulls + 1, player.chambers)}/${player.chambers}`;
         const subtitle = player.alive
-          ? `${player.handCount} carta${player.handCount === 1 ? '' : 's'}  ·  câmara ${Math.min(player.pulls + 1, player.chambers)}/${player.chambers}`
+          ? `${player.handCount} carta${player.handCount === 1 ? '' : 's'}  ·  ${status}`
           : 'eliminado';
+
         const key = `${player.name}|${subtitle}|${isTurn}|${player.alive}`;
         if (seat.plateKey !== key) {
           seat.plateKey = key;
@@ -313,7 +322,7 @@ export class World {
       // ainda vai levar o tempo do gole e do suspense. Enquanto a morte estiver
       // "segurada", o personagem continua sentado.
       if (seat.avatar && !player.alive && !seat.slumped) {
-        if (this.heldDeaths.has(player.id)) this.pendingSlump.add(player.id);
+        if (held) this.pendingSlump.add(player.id);
         else this.applySlump(seat);
       }
     }
@@ -327,12 +336,23 @@ export class World {
     this.heldDeaths.add(playerId);
   }
 
-  /** Libera a queda: se o jogador já morreu no estado, ele tomba agora. */
+  /** Alguém está com a morte retida? Usado também pelo HUD em 2D. */
+  isDeathHeld(playerId) {
+    return this.heldDeaths.has(playerId);
+  }
+
+  /**
+   * Libera a queda: o jogador tomba e a placa passa a mostrar "eliminado".
+   * As duas coisas acontecem juntas, no instante do veredito.
+   */
   releaseDeath(playerId) {
-    this.heldDeaths.delete(playerId);
-    if (!this.pendingSlump.delete(playerId)) return;
+    if (!this.heldDeaths.delete(playerId)) return;
+    const slumping = this.pendingSlump.delete(playerId);
+
     const seat = this.seatOf(playerId);
-    if (seat && !seat.slumped) this.applySlump(seat);
+    if (slumping && seat && !seat.slumped) this.applySlump(seat);
+    // Redesenha a placa, que ficou congelada no estado "vivo" durante a espera.
+    if (this.lastState) this.syncPlayers(this.lastState);
   }
 
   /** Solta todas as mortes seguradas — usado ao reiniciar ou trocar de rodada. */

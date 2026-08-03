@@ -105,28 +105,36 @@ export function renderHand(container, hand, { selected, tableCard, interactive }
   }
 }
 
-export function renderPlayers(container, state, mySeatId) {
+/**
+ * @param {(playerId:string)=>boolean} isHeld Mortes que o cliente ainda não
+ *        revelou. Quem está nessa situação continua listado como vivo, senão
+ *        o painel entrega o resultado antes da animação — e, no modo poções,
+ *        entregaria também qual frasco estava envenenado.
+ */
+export function renderPlayers(container, state, mySeatId, isHeld = () => false) {
   const potionsMode = state.punishment?.mode === 'potions';
   container.innerHTML = '';
 
   for (const player of state.players) {
     const info = AVATAR_INFO[player.avatar] ?? AVATAR_INFO.urso;
+    const dead = !player.alive && !isHeld(player.id);
+
     const chip = document.createElement('div');
     chip.className = 'player-chip';
     if (player.id === state.turnPlayerId && state.phase === 'playing') chip.classList.add('is-turn');
     if (player.id === mySeatId) chip.classList.add('is-you');
-    if (!player.alive) chip.classList.add('is-dead');
+    if (dead) chip.classList.add('is-dead');
 
     // No modo poções o medidor mostra quantos frascos restam na bandeja.
     const dots = potionsMode && player.potions
       ? player.potions
           .map((p) => {
-            if (p.index === player.poisonedAt) return '<span class="chamber-dot fatal"></span>';
+            if (dead && p.index === player.poisonedAt) return '<span class="chamber-dot fatal"></span>';
             return `<span class="chamber-dot${p.drunk ? ' spent' : ''}"></span>`;
           })
           .join('')
       : Array.from({ length: player.chambers }, (_, i) => {
-          if (!player.alive && i === player.pulls - 1) return '<span class="chamber-dot fatal"></span>';
+          if (dead && i === player.pulls - 1) return '<span class="chamber-dot fatal"></span>';
           return `<span class="chamber-dot${i < player.pulls ? ' spent' : ''}"></span>`;
         }).join('');
 
@@ -134,7 +142,7 @@ export function renderPlayers(container, state, mySeatId) {
       <span class="glyph">${info.glyph}</span>
       <div class="info">
         <div class="name">${escapeHtml(player.name)}${player.isBot ? ' 🤖' : ''}</div>
-        <div class="meta">${player.alive ? `${player.handCount} carta${player.handCount === 1 ? '' : 's'}` : 'eliminado'}</div>
+        <div class="meta">${dead ? 'eliminado' : `${player.handCount} carta${player.handCount === 1 ? '' : 's'}`}</div>
         <div class="chambers">${dots}</div>
       </div>`;
     container.appendChild(chip);
