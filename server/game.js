@@ -2,8 +2,8 @@
  * Mesa do Mentiroso — motor de regras.
  *
  * Toda a lógica vive aqui e roda somente no servidor: o cliente nunca conhece
- * a mão dos adversários nem o conteúdo do monte, então não há como trapacear
- * inspecionando o navegador.
+ * a mão dos adversários, o conteúdo do monte, a câmara da bala ou qual poção
+ * está envenenada, então não há como trapacear inspecionando o navegador.
  */
 
 export const RANKS = { ACE: 'A', KING: 'K', QUEEN: 'Q', JOKER: 'JOKER' };
@@ -27,6 +27,13 @@ export const RANK_LABEL_PLURAL = {
 
 export const HAND_SIZE = 5;
 export const CHAMBERS = 6;
+
+/** Os dois modos de punição para quem perde o desafio. */
+export const PUNISHMENT = { REVOLVER: 'revolver', POTIONS: 'potions' };
+export const POTION_COUNTS = [3, 5];
+
+/** Cores das poções — cada frasco tem identidade própria na mesa. */
+export const POTION_COLORS = ['#4fb3d9', '#8f5fd1', '#d95f7a', '#5fd18f', '#e0a03c'];
 
 /** Composição do baralho por número de jogadores. */
 export const DECK_COMPOSITION = {
@@ -74,6 +81,13 @@ export function isTruthfulPlay(cards, tableCard) {
   return cards.every((card) => card.rank === tableCard || card.rank === RANKS.JOKER);
 }
 
+/** Normaliza a configuração de punição vinda da sala. */
+export function normalizePunishment(config = {}) {
+  const mode = config.mode === PUNISHMENT.POTIONS ? PUNISHMENT.POTIONS : PUNISHMENT.REVOLVER;
+  const potionCount = POTION_COUNTS.includes(Number(config.potionCount)) ? Number(config.potionCount) : 5;
+  return { mode, potionCount };
+}
+
 function newRevolver(rng = Math.random) {
   return {
     chambers: CHAMBERS,
@@ -83,16 +97,35 @@ function newRevolver(rng = Math.random) {
   };
 }
 
+/**
+ * Bandeja pessoal de poções. A envenenada tem posição secreta e as bebidas
+ * somem da bandeja, então a chance cresce a cada punição — igual ao revólver.
+ */
+function newTray(count, seatIndex, rng = Math.random) {
+  return {
+    total: count,
+    poisonedAt: Math.floor(rng() * count),
+    potions: Array.from({ length: count }, (_, index) => ({
+      id: `pot${seatIndex}-${index}`,
+      index,
+      color: POTION_COLORS[index % POTION_COLORS.length],
+      drunk: false,
+    })),
+  };
+}
+
 export class Game {
   /**
    * @param {Array<{id:string,name:string,avatar:string,isBot:boolean}>} seats
    *        Jogadores já na ordem de assento (sentido horário).
+   * @param {{rng?:Function, punishment?:{mode:string, potionCount:number}}} options
    */
-  constructor(seats, { rng = Math.random } = {}) {
+  constructor(seats, { rng = Math.random, punishment } = {}) {
     if (!SUPPORTED_PLAYER_COUNTS.includes(seats.length)) {
       throw new Error('A mesa aceita apenas 4 ou 6 jogadores.');
     }
     this.rng = rng;
+    this.punishment = normalizePunishment(punishment);
     this.playerCount = seats.length;
     this.players = seats.map((seat, index) => ({
       id: seat.id,
@@ -102,16 +135,17 @@ export class Game {
       seat: index,
       hand: [],
       alive: true,
-      revolver: newRevolver(rng),
+      revolver: this.punishment.mode === PUNISHMENT.REVOLVER ? newRevolver(rng) : null,
+      tray: this.punishment.mode === PUNISHMENT.POTIONS ? newTray(this.punishment.potionCount, index, rng) : null,
     }));
 
-    this.phase = 'idle'; // idle | playing | reveal | roulette | roundEnd | gameOver
+    this.phase = 'idle'; // idle | playing | reveal | punishment | roundEnd | gameOver
     this.round = 0;
     this.tableCard = null;
     this.turn = 0;
     this.lastPlay = null; // { playerId, cards:[], count }
     this.pile = []; // cartas na mesa, viradas para baixo (com dono e ordem)
-    this.pendingShot = null; // { playerId, reason }
+    this.pendingPunishment = null; // { playerId, reason }
     this.lastReveal = null; // resultado do último desafio (para a animação)
     this.winnerId = null;
     /** Fila de eventos consumida pela camada de rede a cada ação. */
@@ -163,7 +197,7 @@ export class Game {
 
   start() {
     this.phase = 'playing';
-    this.emit('game:start', { playerCount: this.playerCount });
+    this.emit('game:start', { playerCount: this.playerCount, punishment: this.punishment });
     this.startRound(0);
   }
 
@@ -176,7 +210,7 @@ export class Game {
     this.pile = [];
     this.lastPlay = null;
     this.lastReveal = null;
-    this.pendingShot = null;
+    this.pendingPunishment = null;
 
     const alive = this.alivePlayers();
     const deck = buildDeck(this.playerCount);
@@ -245,7 +279,7 @@ export class Game {
 
   /**
    * Passa a vez para o próximo jogador que ainda tem cartas.
-   * Se ninguém mais tem cartas, a rodada acaba sem tiro e um novo baralho é
+   * Se ninguém mais tem cartas, a rodada acaba sem punição e um novo baralho é
    * distribuído (ninguém foi desafiado a tempo).
    */
   advanceAfterPlay() {
@@ -302,56 +336,81 @@ export class Game {
     });
     this.emit('reveal', this.lastReveal);
 
-    this.phase = 'roulette';
-    this.pendingShot = { playerId: loser.id, reason: truthful ? 'acusacao-falsa' : 'mentira' };
-    this.emit('roulette:pending', {
-      playerId: loser.id,
-      playerName: loser.name,
-      reason: this.pendingShot.reason,
-      chamber: loser.revolver.pulls + 1,
-      chambers: loser.revolver.chambers,
-    });
-
+    this.openPunishment(loser, truthful ? 'acusacao-falsa' : 'mentira');
     return { ok: true, reveal: this.lastReveal };
   }
 
+  /** Abre a punição do perdedor, no modo escolhido pela sala. */
+  openPunishment(loser, reason) {
+    this.phase = 'punishment';
+    this.pendingPunishment = { playerId: loser.id, reason };
+
+    const payload = {
+      playerId: loser.id,
+      playerName: loser.name,
+      reason,
+      mode: this.punishment.mode,
+    };
+
+    if (this.punishment.mode === PUNISHMENT.REVOLVER) {
+      payload.chamber = loser.revolver.pulls + 1;
+      payload.chambers = loser.revolver.chambers;
+    } else {
+      // Só as poções ainda cheias são oferecidas; a envenenada segue secreta.
+      payload.potions = loser.tray.potions
+        .filter((p) => !p.drunk)
+        .map((p) => ({ id: p.id, index: p.index, color: p.color }));
+      payload.total = loser.tray.total;
+    }
+
+    this.emit('punishment:pending', payload);
+  }
+
   /**
-   * Roleta russa: o perdedor puxa o gatilho. Cada jogador tem seu próprio
-   * revólver com 6 câmaras e uma bala; a câmara avança a cada punição.
+   * Executa a punição do perdedor.
+   * @param {string} playerId
+   * @param {{potionId?: string}} choice — obrigatório no modo das poções.
    */
-  pullTrigger(playerId) {
-    if (this.phase !== 'roulette' || !this.pendingShot) return this.fail('Nenhum disparo pendente.');
-    if (this.pendingShot.playerId !== playerId) return this.fail('O gatilho não é seu.');
+  sufferPunishment(playerId, { potionId = null } = {}) {
+    if (this.phase !== 'punishment' || !this.pendingPunishment) return this.fail('Nenhuma punição pendente.');
+    if (this.pendingPunishment.playerId !== playerId) return this.fail('A punição não é sua.');
 
     const player = this.getPlayer(playerId);
-    const revolver = player.revolver;
-    const fired = revolver.pulls === revolver.bulletAt;
-    const chamber = revolver.pulls + 1;
-    revolver.pulls += 1;
+    const result = { playerId, playerName: player.name, mode: this.punishment.mode };
+    let fatal;
 
-    this.pendingShot = null;
+    if (this.punishment.mode === PUNISHMENT.REVOLVER) {
+      const revolver = player.revolver;
+      fatal = revolver.pulls === revolver.bulletAt;
+      result.chamber = revolver.pulls + 1;
+      result.chambers = revolver.chambers;
+      revolver.pulls += 1;
+      result.remaining = revolver.chambers - revolver.pulls;
+    } else {
+      const tray = player.tray;
+      const potion = tray.potions.find((p) => p.id === potionId && !p.drunk);
+      if (!potion) return this.fail('Escolha uma poção que ainda esteja na bandeja.');
+      potion.drunk = true;
+      fatal = potion.index === tray.poisonedAt;
+      result.potionId = potion.id;
+      result.potionIndex = potion.index;
+      result.potionColor = potion.color;
+      result.total = tray.total;
+      result.remaining = tray.potions.filter((p) => !p.drunk).length;
+      // A posição do veneno só é revelada quando alguém a bebe.
+      if (fatal) result.poisonedAt = tray.poisonedAt;
+    }
 
-    if (fired) {
+    result.fatal = fatal;
+    this.pendingPunishment = null;
+
+    if (fatal) {
       player.alive = false;
       player.hand = [];
-      this.emit('shot', {
-        playerId,
-        playerName: player.name,
-        chamber,
-        chambers: revolver.chambers,
-        dead: true,
-      });
-      this.emit('eliminated', { playerId, playerName: player.name });
-    } else {
-      this.emit('shot', {
-        playerId,
-        playerName: player.name,
-        chamber,
-        chambers: revolver.chambers,
-        dead: false,
-        remaining: revolver.chambers - revolver.pulls,
-      });
     }
+
+    this.emit('punishment:result', result);
+    if (fatal) this.emit('eliminated', { playerId, playerName: player.name });
 
     const alive = this.alivePlayers();
     if (alive.length <= 1) {
@@ -361,7 +420,7 @@ export class Game {
         winnerId: this.winnerId,
         winnerName: alive[0]?.name ?? null,
       });
-      return { ok: true, fired, gameOver: true };
+      return { ok: true, fatal, gameOver: true };
     }
 
     // Quem sofreu a punição e sobreviveu recomeça; se morreu, passa adiante.
@@ -371,7 +430,7 @@ export class Game {
     this.phase = 'roundEnd';
     this.emit('round:end', { nextStarterId: this.players[this.nextRoundStart].id });
 
-    return { ok: true, fired, roundOver: true };
+    return { ok: true, fatal, roundOver: true };
   }
 
   /** Chamado pela camada de rede após a pausa dramática do fim de rodada. */
@@ -387,7 +446,7 @@ export class Game {
 
   // ------------------------------------------------------------------ estados
 
-  /** Estado visível a todos: nunca inclui o conteúdo das mãos nem do monte. */
+  /** Estado visível a todos: nunca inclui mãos, monte, bala ou veneno. */
   publicState() {
     return {
       phase: this.phase,
@@ -396,6 +455,7 @@ export class Game {
       turn: this.turn,
       turnPlayerId: this.players[this.turn]?.id ?? null,
       playerCount: this.playerCount,
+      punishment: this.punishment,
       players: this.players.map((p) => ({
         id: p.id,
         name: p.name,
@@ -404,8 +464,15 @@ export class Game {
         isBot: p.isBot,
         alive: p.alive,
         handCount: p.hand.length,
-        pulls: p.revolver.pulls,
-        chambers: p.revolver.chambers,
+        // Modo revólver
+        pulls: p.revolver?.pulls ?? 0,
+        chambers: p.revolver?.chambers ?? CHAMBERS,
+        // Modo poções. A posição do veneno só é revelada depois que o jogador
+        // morreu — antes disso continua secreta até para ele mesmo.
+        potions: p.tray ? p.tray.potions.map((x) => ({ id: x.id, index: x.index, color: x.color, drunk: x.drunk })) : null,
+        potionsLeft: p.tray ? p.tray.potions.filter((x) => !x.drunk).length : null,
+        potionsTotal: p.tray?.total ?? null,
+        poisonedAt: !p.alive && p.tray ? p.tray.poisonedAt : null,
       })),
       pile: this.pile.map((c) => ({ id: c.id, ownerId: c.ownerId, order: c.order })),
       lastPlay: this.lastPlay
@@ -416,7 +483,7 @@ export class Game {
           }
         : null,
       lastReveal: this.lastReveal,
-      pendingShot: this.pendingShot,
+      pendingPunishment: this.pendingPunishment,
       winnerId: this.winnerId,
     };
   }

@@ -4,12 +4,12 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { AVATARS, Game, SUPPORTED_PLAYER_COUNTS } from './game.js';
+import { AVATARS, Game, PUNISHMENT, SUPPORTED_PLAYER_COUNTS, normalizePunishment } from './game.js';
 import { botDisplayName, botThinkDelay, decideAction } from './bot.js';
 
-/** Tempo que o cliente tem para exibir a virada das cartas antes do gatilho. */
+/** Tempo que o cliente tem para exibir a virada das cartas antes da punição. */
 const REVEAL_MS = 3800;
-/** Prazo para o humano puxar o gatilho antes do disparo automático. */
+/** Prazo para o humano puxar o gatilho / escolher a poção antes do automático. */
 const TRIGGER_TIMEOUT_MS = 15000;
 /** Pausa entre o fim de uma rodada e a distribuição da próxima. */
 const NEXT_ROUND_MS = 5200;
@@ -21,12 +21,23 @@ export class Room {
     this.io = io;
     this.code = code;
     this.maxPlayers = 4;
-    this.seats = []; // { id, token, name, avatar, isBot, socketId, connected }
+    this.punishment = normalizePunishment({ mode: PUNISHMENT.REVOLVER });
+    this.seats = []; // { id, token, name, avatar, isBot, socketId, connected, userId }
     this.hostId = null;
     this.game = null;
     this.log = [];
     this.timers = new Set();
     this.createdAt = Date.now();
+    /** Preenchido pelo servidor para registrar a vitória no placar. */
+    this.onGameOver = null;
+  }
+
+  /**
+   * Uma vitória só vale ponto quando havia pelo menos dois humanos na mesa —
+   * assim ninguém enche o placar jogando sozinho contra os bots.
+   */
+  countsForLeaderboard() {
+    return this.seats.filter((s) => !s.isBot).length >= 2;
   }
 
   // ------------------------------------------------------------ temporizadores
@@ -79,14 +90,18 @@ export class Room {
     return `${base} ${Math.floor(Math.random() * 999)}`;
   }
 
-  addHuman({ name, avatar, socketId }) {
+  addHuman({ name, avatar, socketId, userId = null }) {
     if (this.game) return { ok: false, error: 'A partida já começou nesta sala.' };
     if (this.seats.length >= this.maxPlayers) return { ok: false, error: 'A mesa está cheia.' };
+    if (userId && this.seats.some((s) => s.userId === userId)) {
+      return { ok: false, error: 'Esta conta já está sentada nesta mesa.' };
+    }
 
     const taken = new Set(this.seats.map((s) => s.avatar));
     const seat = {
       id: randomUUID(),
       token: randomUUID(),
+      userId,
       name: this.uniqueName(name),
       avatar: avatar && !taken.has(avatar) ? avatar : this.freeAvatar(),
       isBot: false,
@@ -133,6 +148,13 @@ export class Room {
     return { ok: true };
   }
 
+  /** Modo de punição da mesa: revólver ou bandeja de poções (3 ou 5). */
+  setPunishment(config) {
+    if (this.game) return { ok: false, error: 'A partida já começou.' };
+    this.punishment = normalizePunishment(config);
+    return { ok: true };
+  }
+
   seatById(id) {
     return this.seats.find((s) => s.id === id) || null;
   }
@@ -153,6 +175,7 @@ export class Room {
     return {
       code: this.code,
       maxPlayers: this.maxPlayers,
+      punishment: this.punishment,
       hostId: this.hostId,
       started: !!this.game,
       seats: this.seats.map((s) => ({
@@ -189,6 +212,7 @@ export class Room {
     for (const event of events) {
       const line = describe(event, this.game);
       if (line) this.log.push(line);
+      if (event.type === 'game:over') this.onGameOver?.(event, this);
     }
     if (this.log.length > 120) this.log = this.log.slice(-120);
     this.io.to(this.code).emit('game:events', events);
@@ -210,6 +234,7 @@ export class Room {
     this.log = [];
     this.game = new Game(
       this.seats.map((s) => ({ id: s.id, name: s.name, avatar: s.avatar, isBot: s.isBot })),
+      { punishment: this.punishment },
     );
     this.game.start();
 
@@ -247,12 +272,31 @@ export class Room {
     return result;
   }
 
-  handlePull(seatId) {
+  /**
+   * Sofre a punição: puxar o gatilho (revólver) ou beber a poção escolhida.
+   * @param {{potionId?: string}} choice
+   */
+  handlePunish(seatId, choice = {}) {
     if (!this.game) return { ok: false, error: 'Nenhuma partida em andamento.' };
-    const result = this.game.pullTrigger(seatId);
+    const result = this.game.sufferPunishment(seatId, choice);
     if (!result.ok) return result;
     this.afterAction();
     return result;
+  }
+
+  /** Escolha automática: bots, jogadores caídos e quem estourou o tempo. */
+  autoPunish(seatId) {
+    const game = this.game;
+    if (!game || game.pendingPunishment?.playerId !== seatId) return;
+    const player = game.getPlayer(seatId);
+
+    if (game.punishment.mode === PUNISHMENT.POTIONS) {
+      const available = player.tray.potions.filter((p) => !p.drunk);
+      const pick = available[Math.floor(Math.random() * available.length)];
+      this.handlePunish(seatId, { potionId: pick.id });
+    } else {
+      this.handlePunish(seatId);
+    }
   }
 
   afterAction() {
@@ -286,13 +330,13 @@ export class Room {
       return;
     }
 
-    if (game.phase === 'roulette' && game.pendingShot) {
-      const loserId = game.pendingShot.playerId;
+    if (game.phase === 'punishment' && game.pendingPunishment) {
+      const loserId = game.pendingPunishment.playerId;
       const wait = this.isAutopilot(loserId)
-        ? REVEAL_MS + 1200 + Math.random() * 800
+        ? REVEAL_MS + 1600 + Math.random() * 1200
         : REVEAL_MS + TRIGGER_TIMEOUT_MS;
       this.later(() => {
-        if (this.game?.pendingShot?.playerId === loserId) this.handlePull(loserId);
+        if (this.game?.pendingPunishment?.playerId === loserId) this.autoPunish(loserId);
       }, wait);
       return;
     }
@@ -385,8 +429,13 @@ function describe(event, game) {
         ? `Cartas reveladas: ${cards}. Verdade! ${event.challengerName} pagou o mico.`
         : `Cartas reveladas: ${cards}. Mentira! ${event.accusedName} foi pego.`;
     }
-    case 'shot':
-      return event.dead
+    case 'punishment:result':
+      if (event.mode === 'potions') {
+        return event.fatal
+          ? `GLUP... ${event.playerName} bebeu a poção envenenada e tombou na mesa.`
+          : `${event.playerName} bebeu e continua de pé (${event.remaining} poç${event.remaining === 1 ? 'ão' : 'ões'} na bandeja).`;
+      }
+      return event.fatal
         ? `BANG! ${event.playerName} pegou a bala na câmara ${event.chamber}.`
         : `Clique... ${event.playerName} sobreviveu (câmara ${event.chamber}/${event.chambers}).`;
     case 'round:exhausted':

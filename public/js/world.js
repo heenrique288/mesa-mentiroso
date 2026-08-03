@@ -65,6 +65,8 @@ export class World {
     this.shakeAmount = 0;
     this.animations = [];
     this.cards = new Map(); // cardId -> mesh
+    this.tray = null; // bandeja de poções ativa, quando houver
+    this.drinkTilt = 0; // inclinação da câmera enquanto o jogador local bebe
     this.seats = []; // { playerId, group, plate, marker, angle, position }
     this.clock = new THREE.Clock();
     this.mySeatIndex = 0;
@@ -218,6 +220,7 @@ export class World {
     }
     this.seats = [];
     this.clearPile();
+    this.clearTray();
 
     this.mySeatIndex = mySeatIndex;
     this.playerCount = players.length;
@@ -433,6 +436,182 @@ export class World {
     });
   }
 
+  // --------------------------------------------------------------- poções
+
+  /** Frasco 3D: vidro, líquido brilhante e rolha. */
+  makePotionMesh(color) {
+    const group = new THREE.Group();
+    const tint = new THREE.Color(color);
+
+    // Vidro por transparência simples em vez de `transmission`: o resultado é
+    // previsível em qualquer GPU e não custa um passe de renderização extra.
+    const glass = new THREE.MeshStandardMaterial({
+      color: 0xcfe2ea,
+      roughness: 0.08,
+      metalness: 0.1,
+      transparent: true,
+      opacity: 0.34,
+      depthWrite: false,
+    });
+
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.075, 20, 16), glass);
+    body.scale.set(1, 1.15, 1);
+    body.position.y = 0.078;
+
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.036, 0.07, 14), glass);
+    neck.position.y = 0.175;
+
+    const cork = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.03, 0.027, 0.035, 12),
+      new THREE.MeshStandardMaterial({ color: 0x8a6236, roughness: 0.9 }),
+    );
+    cork.position.y = 0.222;
+
+    // O líquido é o que dá cor e leitura à distância. O brilho vem do próprio
+    // material (emissive) — sem luzes extras, que forçariam o Three a
+    // recompilar shaders toda vez que uma bandeja aparece ou some.
+    const liquid = new THREE.Mesh(
+      new THREE.SphereGeometry(0.062, 18, 14),
+      new THREE.MeshStandardMaterial({
+        color: tint,
+        emissive: tint,
+        emissiveIntensity: 1.1,
+        roughness: 0.35,
+      }),
+    );
+    liquid.scale.set(1, 0.92, 1);
+    liquid.position.y = 0.07;
+
+    group.add(body, neck, cork, liquid);
+    group.userData.liquid = liquid;
+    group.castShadow = true;
+    return group;
+  }
+
+  /**
+   * Põe a bandeja de poções sobre a mesa, na frente de quem vai beber.
+   * @param {string} playerId
+   * @param {Array<{id:string,color:string}>} potions
+   */
+  showTray(playerId, potions) {
+    this.clearTray();
+    const seat = this.seatOf(playerId);
+    if (!seat) return;
+
+    const angle = seat.angle;
+    const forward = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
+    const side = new THREE.Vector3(Math.cos(angle), 0, -Math.sin(angle));
+    const center = forward.clone().multiplyScalar(0.95);
+
+    this.tray = { playerId, angle, meshes: new Map() };
+
+    potions.forEach((potion, index) => {
+      const spread = (index - (potions.length - 1) / 2) * 0.26;
+      const mesh = this.makePotionMesh(potion.color);
+      const target = center.clone().add(side.clone().multiplyScalar(spread));
+
+      mesh.position.set(target.x, TABLE_TOP + 0.9, target.z);
+      mesh.userData.home = new THREE.Vector3(target.x, TABLE_TOP + 0.01, target.z);
+      this.scene.add(mesh);
+      this.tray.meshes.set(potion.id, mesh);
+
+      // Caem na mesa uma a uma, como se alguém as estivesse servindo.
+      const from = mesh.position.clone();
+      const home = mesh.userData.home;
+      setTimeout(() => {
+        this.animate(420, easeOutCubic, (t) => {
+          mesh.position.y = from.y + (home.y - from.y) * t;
+        });
+      }, index * 110);
+    });
+  }
+
+  /**
+   * O escolhido levanta o frasco até a boca do personagem (ou até a câmera,
+   * se for o jogador local) e bebe. O suspense fica por conta de quem chama.
+   */
+  drinkPotion(potionId) {
+    const tray = this.tray;
+    if (!tray) return;
+    const mesh = tray.meshes.get(potionId);
+    if (!mesh) return;
+
+    const seat = this.seatOf(tray.playerId);
+    const isLocal = seat && !seat.avatar;
+
+    // Boca do personagem, ou logo abaixo da câmera na visão em primeira pessoa.
+    const mouth = isLocal
+      ? new THREE.Vector3(this.cameraBase.x, this.cameraBase.y - 0.18, this.cameraBase.z - 0.45)
+      : seat.position.clone().setY(1.62).lerp(new THREE.Vector3(0, 1.62, 0), 0.12);
+
+    const start = mesh.position.clone();
+    const head = seat?.avatar?.userData.head;
+
+    this.animate(900, easeInOutCubic, (t) => {
+      mesh.position.lerpVectors(start, mouth, t);
+      mesh.position.y += Math.sin(t * Math.PI) * 0.25;
+      mesh.rotation.x = -t * 1.9; // vira o frasco na boca
+      if (head) head.rotation.x = -t * 0.5; // cabeça inclina para trás
+      if (isLocal) this.drinkTilt = t * 0.32;
+    }, () => {
+      // Esvazia o líquido durante o gole.
+      const liquid = mesh.userData.liquid;
+      this.animate(650, easeInOutCubic, (t) => {
+        liquid.scale.y = Math.max(0.001, 0.92 * (1 - t));
+        liquid.position.y = 0.07 - t * 0.04;
+        liquid.material.emissiveIntensity = 1.1 * (1 - t);
+      });
+    });
+
+    tray.drinking = { mesh, seat, isLocal, head };
+  }
+
+  /** Depois do suspense: baixa o frasco e devolve a cabeça ao lugar. */
+  finishDrink(fatal) {
+    const drinking = this.tray?.drinking;
+    if (!drinking) return;
+    const { mesh, seat, isLocal, head } = drinking;
+
+    const start = mesh.position.clone();
+    const startRot = mesh.rotation.x;
+    const home = mesh.userData.home;
+    const headRot = head ? head.rotation.x : 0;
+    const tilt = this.drinkTilt || 0;
+
+    this.animate(fatal ? 420 : 620, easeOutCubic, (t) => {
+      mesh.position.lerpVectors(start, home, t);
+      mesh.rotation.x = startRot * (1 - t);
+      if (head) head.rotation.x = headRot * (1 - t);
+      if (isLocal) this.drinkTilt = tilt * (1 - t);
+    }, () => {
+      if (isLocal) this.drinkTilt = 0;
+      if (fatal) {
+        // O frasco escapa da mão e rola pela mesa.
+        const away = home.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.9, 0, (Math.random() - 0.5) * 0.9));
+        this.animate(700, easeOutCubic, (t) => {
+          mesh.position.lerpVectors(home, away, t);
+          mesh.rotation.z = t * 3.4;
+        });
+      }
+    });
+  }
+
+  clearTray() {
+    if (!this.tray) return;
+    for (const mesh of this.tray.meshes.values()) {
+      const home = mesh.userData.home;
+      this.animate(450, easeInOutCubic, (t) => {
+        mesh.position.y = home.y + t * 0.7;
+        mesh.scale.setScalar(Math.max(0.001, 1 - t));
+      }, () => {
+        this.scene.remove(mesh);
+        disposeTree(mesh);
+      });
+    }
+    this.tray = null;
+    this.drinkTilt = 0;
+  }
+
   // ------------------------------------------------------------ animações
 
   animate(duration, ease, onUpdate, onComplete) {
@@ -521,6 +700,8 @@ export class World {
     const target = this.lookTarget.clone();
     target.x += this.look.x * 2.2;
     target.y += this.look.y * 2.2;
+    // Ao beber, o olhar do jogador local sobe junto com o frasco.
+    target.y += this.drinkTilt * 5.5;
     this.camera.lookAt(target);
 
     this.renderer.render(this.scene, this.camera);

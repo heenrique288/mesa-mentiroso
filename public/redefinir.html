@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Redefinir senha — Mesa do Mentiroso</title>
+<link rel="stylesheet" href="/css/style.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🃏</text></svg>" />
+</head>
+<body>
+
+<section class="screen">
+  <div class="home-card auth-card">
+    <h1>Mesa do <span>Mentiroso</span></h1>
+    <p class="tagline">Recuperação de acesso</p>
+
+    <div id="loading" class="hint">Conferindo o link…</div>
+
+    <div id="invalid" class="hidden">
+      <p class="error-line">Este link é inválido ou já expirou.</p>
+      <a class="btn" href="/">Voltar ao jogo</a>
+    </div>
+
+    <form id="form" class="auth-panel hidden">
+      <div class="recovered-user">
+        <span>Seu nome de usuário é</span>
+        <strong id="username">—</strong>
+      </div>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Nova senha</span>
+          <input id="pass" type="password" maxlength="72" autocomplete="new-password" placeholder="mín. 6" />
+        </label>
+        <label class="field">
+          <span>Confirmar nova senha</span>
+          <input id="pass2" type="password" maxlength="72" autocomplete="new-password" />
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-primary">Salvar nova senha</button>
+      <p id="error" class="error-line"></p>
+    </form>
+
+    <div id="done" class="hidden">
+      <p class="success-line">Senha redefinida! Agora é só entrar com ela.</p>
+      <a class="btn btn-primary" href="/">Ir para o login</a>
+    </div>
+  </div>
+</section>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+const token = new URLSearchParams(location.search).get('token') || '';
+
+const show = (id) => $(id).classList.remove('hidden');
+const hide = (id) => $(id).classList.add('hidden');
+
+async function boot() {
+  if (!token) return fail();
+  try {
+    const res = await fetch(`/api/auth/reset/${encodeURIComponent(token)}`);
+    const data = await res.json();
+    if (!res.ok || !data.ok) return fail();
+
+    $('#username').textContent = data.username;
+    hide('#loading');
+    show('#form');
+  } catch {
+    fail();
+  }
+}
+
+function fail() {
+  hide('#loading');
+  hide('#form');
+  show('#invalid');
+}
+
+$('#form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  $('#error').textContent = '';
+
+  const body = { token, password: $('#pass').value, confirm: $('#pass2').value };
+  try {
+    const res = await fetch('/api/auth/reset', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!data.ok) return void ($('#error').textContent = data.error);
+    hide('#form');
+    show('#done');
+  } catch {
+    $('#error').textContent = 'Não consegui falar com o servidor. Tente de novo.';
+  }
+});
+
+boot();
+</script>
+</body>
+</html>

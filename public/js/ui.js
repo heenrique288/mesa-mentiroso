@@ -106,7 +106,9 @@ export function renderHand(container, hand, { selected, tableCard, interactive }
 }
 
 export function renderPlayers(container, state, mySeatId) {
+  const potionsMode = state.punishment?.mode === 'potions';
   container.innerHTML = '';
+
   for (const player of state.players) {
     const info = AVATAR_INFO[player.avatar] ?? AVATAR_INFO.urso;
     const chip = document.createElement('div');
@@ -115,10 +117,18 @@ export function renderPlayers(container, state, mySeatId) {
     if (player.id === mySeatId) chip.classList.add('is-you');
     if (!player.alive) chip.classList.add('is-dead');
 
-    const dots = Array.from({ length: player.chambers }, (_, i) => {
-      if (!player.alive && i === player.pulls - 1) return '<span class="chamber-dot fatal"></span>';
-      return `<span class="chamber-dot${i < player.pulls ? ' spent' : ''}"></span>`;
-    }).join('');
+    // No modo poções o medidor mostra quantos frascos restam na bandeja.
+    const dots = potionsMode && player.potions
+      ? player.potions
+          .map((p) => {
+            if (p.index === player.poisonedAt) return '<span class="chamber-dot fatal"></span>';
+            return `<span class="chamber-dot${p.drunk ? ' spent' : ''}"></span>`;
+          })
+          .join('')
+      : Array.from({ length: player.chambers }, (_, i) => {
+          if (!player.alive && i === player.pulls - 1) return '<span class="chamber-dot fatal"></span>';
+          return `<span class="chamber-dot${i < player.pulls ? ' spent' : ''}"></span>`;
+        }).join('');
 
     chip.innerHTML = `
       <span class="glyph">${info.glyph}</span>
@@ -129,6 +139,156 @@ export function renderPlayers(container, state, mySeatId) {
       </div>`;
     container.appendChild(chip);
   }
+}
+
+// ---------------------------------------------------------------- placar
+
+export function renderLeaderboard(container, rows, myUsername) {
+  container.innerHTML = '';
+  if (!rows?.length) {
+    const li = document.createElement('li');
+    li.className = 'empty-board';
+    li.textContent = 'Ninguém venceu ainda. Seja o primeiro.';
+    container.appendChild(li);
+    return;
+  }
+
+  for (const row of rows) {
+    const li = document.createElement('li');
+    if (myUsername && row.username === myUsername) li.classList.add('is-me');
+    const medal = { 1: '🥇', 2: '🥈', 3: '🥉' }[row.rank] ?? row.rank;
+    li.innerHTML = `
+      <span class="pos">${medal}</span>
+      <span class="who">${escapeHtml(row.username)}</span>
+      <span class="wins">${row.wins}</span>`;
+    li.title = `${row.wins} vitória${row.wins === 1 ? '' : 's'} em ${row.games} partida${row.games === 1 ? '' : 's'}`;
+    container.appendChild(li);
+  }
+}
+
+// ------------------------------------------------- anúncio central da jogada
+
+let callOutTimer = null;
+
+/**
+ * Mostra bem grande, no centro da tela, quantas cartas o jogador afirmou ter
+ * baixado — a contagem precisa ser óbvia sem ninguém precisar ler o histórico.
+ */
+export function showCallOut(playerName, count, rank) {
+  const el = $('#call-out');
+  clearTimeout(callOutTimer);
+
+  el.querySelector('.call-who').textContent = playerName;
+  el.querySelector('.call-number').textContent = count;
+  el.querySelector('.call-rank').textContent = (count === 1 ? RANK_LABEL[rank] : RANK_PLURAL[rank]) ?? '';
+
+  const pips = el.querySelector('.call-pips');
+  pips.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const pip = document.createElement('i');
+    pip.style.animationDelay = `${0.06 * i + 0.1}s`;
+    pips.appendChild(pip);
+  }
+
+  el.classList.remove('hidden', 'leaving');
+  // Reinicia a animação de entrada mesmo se dois anúncios vierem em sequência.
+  el.style.animation = 'none';
+  void el.offsetWidth;
+  el.style.animation = '';
+
+  callOutTimer = setTimeout(() => {
+    el.classList.add('leaving');
+    callOutTimer = setTimeout(() => el.classList.add('hidden'), 400);
+  }, 2000);
+}
+
+export function hideCallOut() {
+  clearTimeout(callOutTimer);
+  $('#call-out').classList.add('hidden');
+}
+
+// -------------------------------------------------------- punição: poções
+
+/**
+ * Bandeja de poções do perdedor. Só quem vai beber consegue clicar.
+ * @param {{name:string, potions:Array, total:number, isMe:boolean, canPick:boolean}} info
+ * @param {(potionId:string)=>void} onPick
+ */
+/** Trava a bandeja assim que uma poção é escolhida — um clique, uma escolha. */
+let potionLocked = false;
+
+export function showPotions({ name, potions, total, isMe, canPick }, onPick) {
+  const overlay = $('#potion-overlay');
+  const who = overlay.querySelector('.potion-who');
+  const sub = overlay.querySelector('.potion-sub');
+  const tray = $('#potion-tray');
+
+  potionLocked = false;
+  who.textContent = isMe ? 'Escolha o seu destino' : `${name} vai beber`;
+  sub.textContent = isMe
+    ? `${potions.length} de ${total} poções na bandeja — uma delas está envenenada.`
+    : `${potions.length} de ${total} poções na bandeja. Torça pela sorte alheia… ou não.`;
+
+  tray.innerHTML = '';
+  potions.forEach((potion, i) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `potion${canPick ? ' pickable' : ''}`;
+    button.style.setProperty('--liquid', potion.color);
+    button.dataset.potionId = potion.id;
+    button.innerHTML = `<span class="flask"><span class="liquid"></span></span>
+                        <span class="potion-num">${i + 1}</span>`;
+    if (canPick) {
+      button.addEventListener('click', () => {
+        if (potionLocked) return;
+        potionLocked = true;
+        onPick(potion.id);
+      });
+    }
+    tray.appendChild(button);
+  });
+
+  overlay.classList.remove('hidden');
+}
+
+/** Marca a poção escolhida e entra no suspense antes do veredito. */
+export function markPotionChosen(potionId, drinkerName, isMe) {
+  const overlay = $('#potion-overlay');
+  if (overlay.classList.contains('hidden')) return;
+
+  potionLocked = true;
+  for (const button of overlay.querySelectorAll('.potion')) button.classList.remove('pickable');
+
+  const chosen = overlay.querySelector(`.potion[data-potion-id="${CSS.escape(potionId)}"]`);
+  if (chosen) chosen.classList.add('chosen', 'drinking');
+
+  overlay.querySelector('.potion-who').textContent = isMe ? 'Você bebe…' : `${drinkerName} bebe…`;
+  overlay.querySelector('.potion-sub').textContent = 'A mesa inteira prende a respiração.';
+}
+
+/** Revela o resultado depois do suspense. */
+export function resolvePotion({ potionId, fatal, name, remaining, isMe }) {
+  const overlay = $('#potion-overlay');
+  if (overlay.classList.contains('hidden')) return;
+
+  const chosen = overlay.querySelector(`.potion[data-potion-id="${CSS.escape(potionId)}"]`);
+  if (chosen) {
+    chosen.classList.remove('drinking');
+    chosen.classList.add(fatal ? 'poison' : 'safe');
+    if (!fatal) chosen.classList.add('drunk');
+  }
+
+  overlay.querySelector('.potion-who').textContent = fatal
+    ? (isMe ? 'Era essa.' : `${name} escolheu errado.`)
+    : (isMe ? 'Você sobreviveu.' : `${name} sobreviveu.`);
+
+  overlay.querySelector('.potion-sub').textContent = fatal
+    ? 'Veneno. A cabeça bate na mesa e não levanta mais.'
+    : `Água com açúcar. Restam ${remaining} poç${remaining === 1 ? 'ão' : 'ões'} na bandeja.`;
+}
+
+export function hidePotions() {
+  $('#potion-overlay').classList.add('hidden');
 }
 
 export function addLog(logEl, text, kind = '') {

@@ -38,10 +38,22 @@ segundo. Você cria a sala, manda o código de 4 letras no grupo, e todo mundo e
   - Se tinha qualquer carta fora do tema → **o mentiroso paga**.
   - Se era tudo verdade → **o acusador paga**.
   - **Coringa vale como qualquer carta** e nunca conta como mentira.
-- Quem paga aponta o revólver para si e puxa o gatilho. Cada jogador tem o **seu próprio
-  revólver: 6 câmaras, 1 bala**, em posição sorteada e secreta. A câmara avança a cada
-  punição — quanto mais você perde, maior a chance.
-- Quem toma a bala é eliminado. **Ganha quem sobrar por último.**
+- Quem paga enfrenta a punição escolhida pelo anfitrião na criação da sala. **Ganha quem
+  sobrar por último.**
+
+### Os dois modos de punição
+
+| | 🔫 **Revólver** | 🧪 **Poções** |
+|---|---|---|
+| O que acontece | O perdedor puxa o gatilho | O perdedor escolhe e bebe uma poção |
+| Cada jogador tem | 6 câmaras, 1 bala | uma bandeja de 3 ou 5 poções, 1 envenenada |
+| A tensão sobe porque | a câmara avança a cada punição | as poções bebidas somem da bandeja |
+| Morte garantida em | 6 punições | 3 ou 5 punições |
+
+Nos dois modos a bandeja/revólver é **de cada jogador**, e a posição da bala ou do veneno é
+sorteada e fica secreta no servidor — nem o próprio dono consegue descobrir antes da hora.
+No modo das poções o perdedor escolhe qual frasco beber, a mesa toda vê a animação do gole,
+e só depois de um suspense o veredito aparece.
 
 ### Detalhes de regra implementados
 
@@ -50,8 +62,46 @@ segundo. Você cria a sala, manda o código de 4 letras no grupo, e todo mundo e
   e um novo baralho é distribuído.
 - Depois de um tiro, **quem sobreviveu à punição abre a rodada seguinte**.
 
+## Contas e placar dos maiores vencedores
+
+Ao abrir o jogo você cria uma conta (usuário, email e senha) ou entra como convidado.
+A conta serve para uma coisa só: **pontuar na tabela dos 10 maiores vencedores**, que fica
+na tela inicial. Cada partida vencida vale uma vitória.
+
+- Só contam partidas com **dois ou mais jogadores humanos** na mesa — vencer os bots não
+  enche o placar. O jogo avisa na tela de fim de jogo quando a partida não valeu ponto.
+- Convidados jogam normalmente, mas não pontuam.
+- As senhas são guardadas com **scrypt e sal aleatório**, nunca em texto. Por isso o
+  "esqueci minha senha" manda um link que **mostra o seu nome de usuário e deixa você
+  escolher uma nova senha** — nem o servidor consegue ler a antiga.
+
+### Email de recuperação
+
+Sem configuração nenhuma, o servidor imprime o link de recuperação no console **e** o
+mostra na própria tela, para você não ficar travado. Para enviar email de verdade, defina:
+
+```bash
+SMTP_URL="smtps://usuario:senha@smtp.seuprovedor.com:465"
+MAIL_FROM="Mesa do Mentiroso <nao-responda@seudominio.com>"
+```
+
+### Onde os dados ficam
+
+Num arquivo JSON em `data/mesa.json` (mude com a variável `DATA_DIR`). Simples e sem banco.
+
+> ⚠️ **No plano gratuito do Render o disco é efêmero**: contas e placar são apagados a cada
+> deploy ou reinício. Para o placar durar, use um serviço com disco persistente ou aponte
+> `DATA_DIR` para um volume. Se isso virar um problema, dá para trocar `server/store.js`
+> por um banco de verdade sem mexer no resto.
+
 ## Recursos
 
+- **Dois modos de punição** — revólver ou bandeja de poções (3 ou 5), escolhidos ao criar a sala.
+- **Contas e ranking** dos 10 maiores vencedores, com recuperação de senha por email.
+- **Anúncio grande no centro da tela** a cada jogada, com o número e mini-cartas para você
+  contar de relance, sem precisar ler o histórico.
+- **Voz da mesa** anunciando "One King", "Two Kings"… e gritando "Liar!" nos desafios,
+  usando a síntese de fala do próprio navegador (botão 🗣️ liga e desliga).
 - **Multiplayer real por salas** — código de 4 letras, quantos grupos quiser ao mesmo tempo.
 - **Servidor autoritativo** — a mão dos adversários e o conteúdo do monte nunca são enviados
   ao seu navegador, então não dá para trapacear pelo console.
@@ -69,20 +119,25 @@ segundo. Você cria a sala, manda o código de 4 letras no grupo, e todo mundo e
 
 ```
 server/
-  game.js    Motor de regras (baralho, turnos, desafio, roleta). Puro, sem rede.
+  game.js    Motor de regras (baralho, turnos, desafio, punição). Puro, sem rede.
   bot.js     Heurística dos bots: quando blefar e quando desconfiar.
   room.js    Sala: assentos, temporizadores, piloto automático, transmissão de estado.
+  auth.js    Contas, senhas (scrypt), tokens de sessão e placar.
+  store.js   Persistência em JSON com escrita atômica.
+  mailer.js  Email de recuperação (SMTP opcional, com saída no console).
   index.js   HTTP + Socket.IO.
 public/
-  index.html Telas (início, lobby, jogo) e sobreposições.
-  css/       Tema do bar.
+  index.html    Telas (login, início, lobby, jogo) e sobreposições.
+  redefinir.html Página do link de recuperação de senha.
+  css/          Tema do bar.
   js/
-    main.js      Controlador: telas, rede e coreografia dos eventos.
-    world.js     Cena 3D, câmera em primeira pessoa e animação das cartas.
+    main.js      Controlador: contas, telas, rede e coreografia dos eventos.
+    world.js     Cena 3D, câmera em primeira pessoa, cartas e poções.
     avatars.js   Personagens montados com formas primitivas.
     textures.js  Cartas, madeira e placas geradas em canvas.
-    ui.js        Renderização do DOM (mão, painéis, overlays).
+    ui.js        Renderização do DOM (mão, painéis, overlays, placar).
     audio.js     Efeitos sonoros sintetizados.
+    voice.js     Voz da mesa via Web Speech API.
 ```
 
 ## Publicando na internet
@@ -134,7 +189,11 @@ Railway, Fly.io e Koyeb funcionam igual — todos leem o `npm start` e a variáv
 | O quê | Onde |
 |---|---|
 | Composição do baralho | `DECK_COMPOSITION` em `server/game.js` |
-| Cartas na mão / número de câmaras | `HAND_SIZE` e `CHAMBERS` em `server/game.js` |
+| Cartas na mão / câmaras / opções de poções | `HAND_SIZE`, `CHAMBERS`, `POTION_COUNTS` em `server/game.js` |
+| Cores das poções | `POTION_COLORS` em `server/game.js` |
+| Duração do gole e do suspense | `DRINK_MS` e `SUSPENSE_MS` em `public/js/main.js` |
+| Falas da mesa | `announcePlay` / `announceLiar` em `public/js/voice.js` |
+| Quantos humanos a partida precisa para valer ponto | `countsForLeaderboard` em `server/room.js` |
 | Ritmo (tempo de revelação, gatilho automático, intervalo entre rodadas) | constantes no topo de `server/room.js` |
 | Agressividade dos bots | `suspicionLevel` em `server/bot.js` |
 | Enquadramento da câmera | `cameraBase` e `SEAT_RADIUS` em `public/js/world.js` |

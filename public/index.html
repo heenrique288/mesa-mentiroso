@@ -15,54 +15,167 @@
 
 <canvas id="scene"></canvas>
 
-<!-- ============================ TELA INICIAL ============================ -->
-<section id="screen-home" class="screen">
-  <div class="home-card">
+<!-- ============================== LOGIN =============================== -->
+<section id="screen-auth" class="screen">
+  <div class="home-card auth-card">
     <h1>Mesa do <span>Mentiroso</span></h1>
-    <p class="tagline">Baixe as cartas. Minta com convicção. Reze pela câmara vazia.</p>
+    <p class="tagline">Entre para valer ponto na tabela dos maiores vencedores.</p>
 
-    <label class="field">
-      <span>Seu nome</span>
-      <input id="input-name" type="text" maxlength="16" placeholder="Como te chamam no bar?" autocomplete="off" />
-    </label>
-
-    <div class="field">
-      <span>Escolha seu personagem</span>
-      <div id="avatar-picker" class="avatar-picker"></div>
+    <div class="tabs" id="auth-tabs">
+      <button class="tab is-active" data-panel="login">Entrar</button>
+      <button class="tab" data-panel="register">Criar conta</button>
     </div>
 
-    <div class="home-actions">
-      <div class="action-block">
-        <h2>Criar uma mesa</h2>
-        <div class="size-picker">
-          <button class="size-btn is-active" data-size="4">4 jogadores</button>
-          <button class="size-btn" data-size="6">6 jogadores</button>
+    <!-- Entrar -->
+    <form id="panel-login" class="auth-panel" autocomplete="on">
+      <label class="field">
+        <span>Nome de usuário ou email</span>
+        <input id="login-user" type="text" maxlength="64" autocomplete="username" />
+      </label>
+      <label class="field">
+        <span>Senha</span>
+        <input id="login-pass" type="password" maxlength="72" autocomplete="current-password" />
+      </label>
+      <button type="submit" class="btn btn-primary">Entrar</button>
+      <button type="button" class="link-btn" data-panel="forgot">Esqueci minha senha</button>
+    </form>
+
+    <!-- Criar conta -->
+    <form id="panel-register" class="auth-panel hidden" autocomplete="on">
+      <label class="field">
+        <span>Nome de usuário</span>
+        <input id="reg-user" type="text" maxlength="16" autocomplete="username" placeholder="3 a 16 caracteres" />
+      </label>
+      <label class="field">
+        <span>Email</span>
+        <input id="reg-email" type="email" maxlength="120" autocomplete="email" />
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>Senha</span>
+          <input id="reg-pass" type="password" maxlength="72" autocomplete="new-password" placeholder="mín. 6" />
+        </label>
+        <label class="field">
+          <span>Confirmar senha</span>
+          <input id="reg-pass2" type="password" maxlength="72" autocomplete="new-password" />
+        </label>
+      </div>
+      <button type="submit" class="btn btn-primary">Criar conta e entrar</button>
+    </form>
+
+    <!-- Esqueci a senha -->
+    <form id="panel-forgot" class="auth-panel hidden">
+      <p class="hint">
+        Informe o email da conta. Você receberá um link mostrando seu nome de usuário
+        e permitindo escolher uma nova senha.
+      </p>
+      <label class="field">
+        <span>Email cadastrado</span>
+        <input id="forgot-email" type="email" maxlength="120" autocomplete="email" />
+      </label>
+      <button type="submit" class="btn btn-primary">Enviar link de recuperação</button>
+      <button type="button" class="link-btn" data-panel="login">Voltar para o login</button>
+      <div id="forgot-devlink" class="devlink hidden"></div>
+    </form>
+
+    <p id="auth-error" class="error-line"></p>
+    <button id="btn-guest" class="link-btn subtle">Entrar sem conta (não pontua no placar)</button>
+  </div>
+</section>
+
+<!-- ============================ TELA INICIAL ============================ -->
+<section id="screen-home" class="screen hidden">
+  <div class="home-wrap">
+
+    <div class="home-card">
+      <div class="account-bar">
+        <span id="account-name">Convidado</span>
+        <button id="btn-logout" class="link-btn">sair</button>
+      </div>
+
+      <h1>Mesa do <span>Mentiroso</span></h1>
+      <p class="tagline">Baixe as cartas. Minta com convicção. Reze pela câmara vazia.</p>
+
+      <label class="field hidden" id="guest-name-field">
+        <span>Seu nome na mesa</span>
+        <input id="input-name" type="text" maxlength="16" placeholder="Como te chamam no bar?" autocomplete="off" />
+      </label>
+
+      <div class="field">
+        <span>Escolha seu personagem</span>
+        <div id="avatar-picker" class="avatar-picker"></div>
+      </div>
+
+      <div class="home-actions">
+        <div class="action-block">
+          <h2>Criar uma mesa</h2>
+
+          <div class="setting">
+            <span class="setting-label">Jogadores</span>
+            <div class="size-picker" id="home-size">
+              <button class="size-btn is-active" data-size="4">4</button>
+              <button class="size-btn" data-size="6">6</button>
+            </div>
+          </div>
+
+          <div class="setting">
+            <span class="setting-label">Modo de punição</span>
+            <div class="mode-picker" id="home-mode">
+              <button class="mode-btn is-active" data-mode="revolver">
+                <span class="mode-icon">🔫</span>
+                <b>Revólver</b>
+                <small>6 câmaras, 1 bala</small>
+              </button>
+              <button class="mode-btn" data-mode="potions">
+                <span class="mode-icon">🧪</span>
+                <b>Poções</b>
+                <small>uma está envenenada</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="setting hidden" id="home-potion-setting">
+            <span class="setting-label">Poções na bandeja</span>
+            <div class="size-picker" id="home-potions">
+              <button class="size-btn" data-potions="3">3 poções</button>
+              <button class="size-btn is-active" data-potions="5">5 poções</button>
+            </div>
+          </div>
+
+          <button id="btn-create" class="btn btn-primary">Abrir a mesa</button>
         </div>
-        <button id="btn-create" class="btn btn-primary">Abrir a mesa</button>
+
+        <div class="action-divider"><span>ou</span></div>
+
+        <div class="action-block">
+          <h2>Entrar numa mesa</h2>
+          <input id="input-code" class="code-input" type="text" maxlength="4" placeholder="CÓDIGO" autocomplete="off" />
+          <button id="btn-join" class="btn">Sentar à mesa</button>
+        </div>
       </div>
 
-      <div class="action-divider"><span>ou</span></div>
+      <p id="home-error" class="error-line"></p>
 
-      <div class="action-block">
-        <h2>Entrar numa mesa</h2>
-        <input id="input-code" class="code-input" type="text" maxlength="4" placeholder="CÓDIGO" autocomplete="off" />
-        <button id="btn-join" class="btn">Sentar à mesa</button>
-      </div>
+      <details class="rules">
+        <summary>Como se joga</summary>
+        <ul>
+          <li>O baralho só tem <b>Ases, Reis, Damas e Coringas</b>. Coringa vale qualquer carta.</li>
+          <li>Cada rodada tem um <b>Tema da Mesa</b> (ex.: Rodada do Rei) e todo mundo recebe 5 cartas.</li>
+          <li>Na sua vez, baixe de <b>1 a 5 cartas viradas para baixo</b> afirmando que são todas do tema.</li>
+          <li>Só o <b>jogador seguinte</b> pode gritar <b>MENTIROSO</b> — ou baixar cartas e empurrar a dúvida adiante.</li>
+          <li>No desafio as cartas viram: mentiu, o mentiroso paga; era verdade, o acusador paga.</li>
+          <li>Quem paga enfrenta a punição da mesa: <b>o revólver</b> (6 câmaras, 1 bala) ou
+              <b>a bandeja de poções</b> (uma envenenada, e as bebidas somem da bandeja).</li>
+        </ul>
+      </details>
     </div>
 
-    <p id="home-error" class="error-line"></p>
+    <aside class="home-card leaderboard-card">
+      <h2 class="board-title">🏆 Maiores vencedores</h2>
+      <ol id="leaderboard" class="leaderboard"></ol>
+      <p class="hint">Só contam partidas com dois ou mais jogadores humanos na mesa.</p>
+    </aside>
 
-    <details class="rules">
-      <summary>Como se joga</summary>
-      <ul>
-        <li>O baralho só tem <b>Ases, Reis, Damas e Coringas</b>. Coringa vale qualquer carta.</li>
-        <li>Cada rodada tem um <b>Tema da Mesa</b> (ex.: Rodada do Rei) e todo mundo recebe 5 cartas.</li>
-        <li>Na sua vez, baixe de <b>1 a 5 cartas viradas para baixo</b> afirmando que são todas do tema.</li>
-        <li>Só o <b>jogador seguinte</b> pode gritar <b>MENTIROSO</b> — ou baixar cartas e empurrar a dúvida adiante.</li>
-        <li>No desafio as cartas viram: mentiu, o mentiroso paga; era verdade, o acusador paga.</li>
-        <li>Quem paga aponta o revólver para si e puxa o gatilho. Seis câmaras, uma bala. Boa sorte.</li>
-      </ul>
-    </details>
   </div>
 </section>
 
@@ -72,9 +185,28 @@
     <h1 class="lobby-title">Sala <span id="lobby-code">----</span></h1>
     <p class="tagline">Mande esse código para a galera. A partida começa quando a mesa encher.</p>
 
-    <div class="size-picker" id="lobby-size">
-      <button class="size-btn" data-size="4">Mesa de 4</button>
-      <button class="size-btn" data-size="6">Mesa de 6</button>
+    <div class="setting">
+      <span class="setting-label">Jogadores</span>
+      <div class="size-picker" id="lobby-size">
+        <button class="size-btn" data-size="4">Mesa de 4</button>
+        <button class="size-btn" data-size="6">Mesa de 6</button>
+      </div>
+    </div>
+
+    <div class="setting">
+      <span class="setting-label">Modo de punição</span>
+      <div class="mode-picker" id="lobby-mode">
+        <button class="mode-btn" data-mode="revolver"><span class="mode-icon">🔫</span><b>Revólver</b></button>
+        <button class="mode-btn" data-mode="potions"><span class="mode-icon">🧪</span><b>Poções</b></button>
+      </div>
+    </div>
+
+    <div class="setting hidden" id="lobby-potion-setting">
+      <span class="setting-label">Poções na bandeja</span>
+      <div class="size-picker" id="lobby-potions">
+        <button class="size-btn" data-potions="3">3 poções</button>
+        <button class="size-btn" data-potions="5">5 poções</button>
+      </div>
     </div>
 
     <ul id="lobby-seats" class="lobby-seats"></ul>
@@ -95,16 +227,25 @@
     <div class="topbar-left">
       <span class="pill pill-room">Sala <b id="hud-room">----</b></span>
       <span class="pill">Rodada <b id="hud-round">1</b></span>
+      <span class="pill" id="hud-mode">🔫</span>
     </div>
     <div id="hud-theme" class="theme-badge">
       <span class="theme-label">Tema da Mesa</span>
       <strong id="hud-theme-value">—</strong>
     </div>
     <div class="topbar-right">
+      <button id="btn-voice" class="icon-btn" title="Ligar/desligar a voz da mesa">🗣️</button>
       <button id="btn-mute" class="icon-btn" title="Ligar/desligar som">🔊</button>
       <button id="btn-leave" class="icon-btn" title="Sair da mesa">⏻</button>
     </div>
   </header>
+
+  <!-- Anúncio grande e legível da jogada, no centro da tela -->
+  <div id="call-out" class="call-out hidden">
+    <div class="call-who"></div>
+    <div class="call-cards"><span class="call-number"></span><span class="call-rank"></span></div>
+    <div class="call-pips"></div>
+  </div>
 
   <div id="turn-banner" class="turn-banner"></div>
 
@@ -134,6 +275,7 @@
     <div class="reveal-verdict"></div>
   </div>
 
+  <!-- Punição: revólver -->
   <div id="roulette-overlay" class="roulette-overlay hidden">
     <div class="roulette-box">
       <div class="roulette-who"></div>
@@ -143,10 +285,20 @@
     </div>
   </div>
 
+  <!-- Punição: poções -->
+  <div id="potion-overlay" class="potion-overlay hidden">
+    <div class="potion-box">
+      <div class="potion-who"></div>
+      <div id="potion-tray" class="potion-tray"></div>
+      <div class="potion-sub"></div>
+    </div>
+  </div>
+
   <div id="gameover-overlay" class="gameover-overlay hidden">
     <div class="home-card">
       <h1 id="gameover-title">Fim de jogo</h1>
       <p id="gameover-sub" class="tagline"></p>
+      <div id="gameover-score" class="score-note hidden"></div>
       <button id="btn-again" class="btn btn-primary">Voltar ao lobby</button>
     </div>
   </div>

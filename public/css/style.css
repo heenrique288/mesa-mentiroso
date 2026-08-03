@@ -701,15 +701,445 @@ input[type="text"]:focus { border-color: var(--amber); }
 }
 .toast.error { border-color: var(--blood-bright); color: #ffbdb6; }
 
+/* ======================================================================
+   LOGIN, CONTA E PLACAR
+   ====================================================================== */
+
+.auth-card { max-width: 520px; }
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  flex: 1;
+  padding: 11px 8px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab:hover { color: var(--ink); }
+.tab.is-active { color: var(--amber); border-bottom-color: var(--amber); }
+
+.auth-panel { display: flex; flex-direction: column; gap: 4px; }
+.auth-panel .btn { margin-top: 8px; }
+
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field-row .field { margin-bottom: 20px; }
+
+input[type="password"],
+input[type="email"] {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--ink);
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input[type="password"]:focus,
+input[type="email"]:focus { border-color: var(--amber); }
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--amber);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 10px 4px 2px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.link-btn:hover { filter: brightness(1.25); }
+.link-btn.subtle { color: var(--muted); display: block; width: 100%; margin-top: 6px; }
+
+.success-line { color: var(--green); font-size: 15px; margin: 0 0 18px; }
+
+.devlink {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px dashed var(--amber);
+  border-radius: 10px;
+  background: rgba(233, 180, 76, 0.08);
+  font-size: 13px;
+  color: var(--muted);
+  word-break: break-all;
+}
+.devlink a { color: var(--amber); }
+.devlink b { display: block; color: var(--ink); margin-bottom: 6px; }
+
+.recovered-user {
+  text-align: center;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+}
+.recovered-user span {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.recovered-user strong { font-size: 26px; color: var(--amber); }
+
+.account-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+#account-name { font-weight: 700; color: var(--amber-soft); }
+
+/* Layout de duas colunas da tela inicial */
+.home-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 720px) 300px;
+  gap: 18px;
+  align-items: start;
+  width: 100%;
+  max-width: 1060px;
+}
+
+.leaderboard-card { padding: 24px 22px; position: sticky; top: 24px; }
+.board-title {
+  margin: 0 0 16px;
+  font-size: 15px;
+  color: var(--amber);
+  letter-spacing: 0.08em;
+}
+
+.leaderboard { list-style: none; margin: 0 0 14px; padding: 0; counter-reset: pos; }
+.leaderboard li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font-size: 14px;
+}
+.leaderboard li:nth-child(odd) { background: rgba(0, 0, 0, 0.28); }
+.leaderboard .pos {
+  width: 24px;
+  text-align: center;
+  font-weight: 800;
+  color: var(--muted);
+  font-size: 13px;
+}
+.leaderboard .who {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.leaderboard .wins {
+  font-weight: 800;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+.leaderboard li.is-me { border-color: var(--amber); background: rgba(233, 180, 76, 0.12); }
+.leaderboard li:nth-child(1) .pos { color: #ffd970; font-size: 16px; }
+.leaderboard li:nth-child(2) .pos { color: #d8d8e0; }
+.leaderboard li:nth-child(3) .pos { color: #d09a62; }
+.leaderboard .empty-board {
+  color: var(--muted);
+  font-style: italic;
+  justify-content: center;
+  padding: 22px 10px;
+}
+
+/* ======================================================================
+   SELETOR DE MODO DE PUNIÇÃO
+   ====================================================================== */
+
+.setting { margin-bottom: 16px; }
+.setting-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.mode-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mode-btn {
+  padding: 12px 8px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--muted);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.12s;
+}
+.mode-btn:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--amber); }
+.mode-btn:disabled { cursor: not-allowed; opacity: 0.55; }
+.mode-btn .mode-icon { display: block; font-size: 24px; margin-bottom: 3px; }
+.mode-btn b { display: block; font-size: 13px; letter-spacing: 0.04em; }
+.mode-btn small { display: block; font-size: 11px; opacity: 0.75; margin-top: 2px; }
+.mode-btn.is-active {
+  border-color: var(--amber);
+  background: rgba(233, 180, 76, 0.14);
+  color: var(--amber-soft);
+}
+
+/* ======================================================================
+   ANÚNCIO CENTRAL DA JOGADA
+   ====================================================================== */
+
+.call-out {
+  position: absolute;
+  top: 26%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 25;
+  pointer-events: none;
+  animation: call-pop 0.42s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+.call-out.leaving { animation: call-leave 0.4s ease forwards; }
+
+.call-who {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amber);
+  text-shadow: 0 2px 12px #000;
+  margin-bottom: 2px;
+}
+.call-cards {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 14px;
+  text-shadow: 0 6px 26px rgba(0, 0, 0, 0.95), 0 0 46px rgba(233, 180, 76, 0.35);
+}
+.call-number {
+  font-size: 92px;
+  font-weight: 800;
+  line-height: 0.9;
+  color: #fff6e2;
+  font-variant-numeric: tabular-nums;
+}
+.call-rank {
+  font-size: 44px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--amber);
+}
+
+/* Mini-cartas: dá para contar de relance, sem ler o número */
+.call-pips { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
+.call-pips i {
+  display: block;
+  width: 22px;
+  height: 31px;
+  border-radius: 4px;
+  background: linear-gradient(160deg, #f6f0e2, #d9cdb6);
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+  animation: pip-drop 0.3s backwards cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+@keyframes call-pop {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes call-leave {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -80%) scale(0.9); }
+}
+@keyframes pip-drop {
+  from { opacity: 0; transform: translateY(-14px) rotate(-12deg); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ======================================================================
+   PUNIÇÃO: BANDEJA DE POÇÕES
+   ====================================================================== */
+
+.potion-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 32;
+  animation: fade-in 0.3s ease;
+}
+.potion-box { text-align: center; width: min(680px, 94vw); }
+.potion-who {
+  font-size: 25px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.potion-sub { color: var(--muted); margin-top: 22px; font-size: 15px; min-height: 24px; }
+
+.potion-tray {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 20px;
+  padding: 26px 18px 20px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(60, 39, 24, 0.55), rgba(26, 17, 11, 0.75));
+  border: 1px solid var(--border);
+  box-shadow: inset 0 8px 30px rgba(0, 0, 0, 0.6);
+}
+
+.potion {
+  background: none;
+  border: none;
+  padding: 6px 4px 0;
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.16s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.potion.pickable { cursor: pointer; }
+.potion.pickable:hover { transform: translateY(-12px); }
+.potion.pickable:hover .flask { box-shadow: 0 0 0 2px var(--amber), 0 12px 26px rgba(0, 0, 0, 0.7); }
+
+/* Frasco: gargalo + corpo com o líquido dentro */
+.flask {
+  position: relative;
+  display: block;
+  width: 54px;
+  height: 72px;
+  border-radius: 10px 10px 22px 22px;
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04));
+  overflow: hidden;
+  transition: box-shadow 0.18s, opacity 0.3s;
+}
+.flask::before {
+  content: "";
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+/* Brilho de vidro */
+.flask::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 8px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.4);
+  filter: blur(1px);
+}
+
+.liquid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 62%;
+  background: var(--liquid, #4fb3d9);
+  box-shadow: 0 0 18px var(--liquid, #4fb3d9), inset 0 3px 8px rgba(255, 255, 255, 0.35);
+  transition: height 0.5s ease;
+}
+.liquid::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  border-radius: 50%;
+  background: inherit;
+  filter: brightness(1.35);
+}
+
+.potion-num {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+}
+
+.potion.drunk { opacity: 0.32; }
+.potion.drunk .liquid { height: 0; }
+.potion.drunk .flask { border-style: dashed; }
+.potion.chosen .flask { box-shadow: 0 0 0 3px var(--amber), 0 0 34px rgba(233, 180, 76, 0.55); }
+.potion.chosen { transform: translateY(-16px); }
+.potion.poison .flask { box-shadow: 0 0 0 3px var(--blood-bright), 0 0 44px rgba(224, 72, 61, 0.75); }
+.potion.poison .potion-num { color: var(--blood-bright); }
+.potion.safe .potion-num { color: var(--green); }
+
+/* Suspense: o frasco escolhido treme antes do resultado */
+.potion.drinking { animation: sip 0.5s ease-in-out infinite alternate; }
+@keyframes sip {
+  from { transform: translateY(-16px) rotate(-3deg); }
+  to { transform: translateY(-20px) rotate(3deg); }
+}
+
+.score-note {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 14px;
+  color: var(--muted);
+}
+.score-note b { color: var(--amber); }
+
 /* ---------------------------------------------------------- responsivo */
 
 @media (max-width: 1080px) {
   .sidepanel { width: 240px; }
   .players-strip { width: 180px; }
+  .home-wrap { grid-template-columns: minmax(0, 1fr); max-width: 720px; }
+  .leaderboard-card { position: static; }
 }
 
 @media (max-width: 860px) {
   .home-actions { grid-template-columns: 1fr; }
+  .field-row { grid-template-columns: 1fr; gap: 0; }
+  .call-number { font-size: 62px; }
+  .call-rank { font-size: 30px; }
+  .call-out { top: 22%; }
+  .potion-tray { gap: 10px; padding: 18px 10px 14px; }
+  .flask { width: 42px; height: 58px; }
   .action-divider { padding: 0; text-align: center; }
   .sidepanel { top: auto; bottom: 200px; right: 10px; width: 210px; max-height: 210px; }
   .players-strip { width: 150px; left: 10px; }
