@@ -31,7 +31,8 @@ segundo. Você cria a sala, manda o código de 4 letras no grupo, e todo mundo e
 - Toda rodada tem um **Tema da Mesa** sorteado (Rodada do Rei, da Dama ou do Ás).
 - Na sua vez você baixa de **1 a 5 cartas viradas para baixo**, afirmando que são todas do
   tema. Você pode mentir à vontade — ninguém vê o que desceu.
-- **Só o jogador seguinte** (no sentido horário) pode reagir, e tem duas opções:
+- **Só o jogador seguinte** (no sentido em que a mesa está correndo) pode reagir, e tem
+  duas opções:
   - **Gritar MENTIROSO** e virar as cartas do anterior; ou
   - **Baixar as próprias cartas**, deixando a dúvida passar adiante para o próximo.
 - No desafio as cartas são reveladas:
@@ -61,6 +62,10 @@ e só depois de um suspense o veredito aparece.
 - Se todos ficarem sem cartas sem ninguém desafiar, a rodada é **anulada** (ninguém atira)
   e um novo baralho é distribuído.
 - Depois de um tiro, **quem sobreviveu à punição abre a rodada seguinte**.
+- **A mesa vira a cada rodada.** Assim que a punição termina (o gatilho é puxado ou a poção
+  é bebida), o sentido do jogo se inverte: sai do anti-horário para o horário e vice-versa.
+  Quem estava prestes a ser desafiado passa a ser o desafiante — e a rodada anulada também
+  vira a mesa. As setas no feltro e a pílula no topo da tela mostram o rumo atual.
 
 ## Contas e placar dos maiores vencedores
 

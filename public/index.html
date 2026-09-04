@@ -228,6 +228,9 @@
       <span class="pill pill-room">Sala <b id="hud-room">----</b></span>
       <span class="pill">Rodada <b id="hud-round">1</b></span>
       <span class="pill" id="hud-mode">🔫</span>
+      <span class="pill pill-flow" id="hud-direction" title="Sentido da mesa">
+        <i class="flow-icon">↺</i><b class="flow-word">Anti-horário</b>
+      </span>
     </div>
     <div id="hud-theme" class="theme-badge">
       <span class="theme-label">Tema da Mesa</span>
@@ -245,6 +248,13 @@
     <div class="call-who"></div>
     <div class="call-cards"><span class="call-number"></span><span class="call-rank"></span></div>
     <div class="call-pips"></div>
+  </div>
+
+  <!-- A mesa virou: anúncio central quando o sentido do jogo inverte -->
+  <div id="flow-call" class="flow-call hidden">
+    <div class="flow-glyph">↺</div>
+    <div class="flow-title">A mesa virou</div>
+    <div class="flow-sub"></div>
   </div>
 
   <div id="turn-banner" class="turn-banner"></div>

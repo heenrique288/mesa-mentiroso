@@ -111,6 +111,12 @@ export const sfx = {
     noise(0.18, { gain: 0.6, filter: 'highpass', freq: 2400 });
     tone(90, 0.42, { type: 'sawtooth', gain: 0.35, slideTo: 32 });
   },
+  /** A mesa virou: um giro que sobe e desce, como a mesa dando meia-volta. */
+  reverse() {
+    tone(320, 0.34, { type: 'triangle', gain: 0.18, slideTo: 760 });
+    setTimeout(() => tone(760, 0.3, { type: 'triangle', gain: 0.14, slideTo: 420 }), 170);
+    noise(0.42, { gain: 0.13, filter: 'bandpass', freq: 1500, q: 1.4 });
+  },
   /** Início de rodada. */
   roundStart() {
     tone(392, 0.18, { type: 'triangle', gain: 0.16 });

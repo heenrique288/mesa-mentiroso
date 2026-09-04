@@ -92,6 +92,11 @@ export function announceLiar() {
   speak('Liar!', { rate: 1.05, pitch: 0.85, interrupt: true });
 }
 
+/** A mesa virou de sentido. */
+export function announceReverse() {
+  speak('Reverse!', { rate: 0.95, pitch: 1.05, interrupt: true });
+}
+
 /** Chamado quando o perdedor vai beber — dá o clima do suspense. */
 export function announceDrink() {
   speak('Drink.', { rate: 0.9, pitch: 0.8, interrupt: true });

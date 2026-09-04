@@ -28,6 +28,15 @@ export const RANK_LABEL_PLURAL = {
 export const HAND_SIZE = 5;
 export const CHAMBERS = 6;
 
+/**
+ * Sentido da mesa. +1 anda para o assento seguinte (anti-horário na tela),
+ * -1 anda para o anterior (horário). A mesa começa em anti-horário e vira a
+ * cada rodada encerrada.
+ */
+export const DIRECTION = { CCW: 1, CW: -1 };
+
+export const DIRECTION_LABEL = { 1: 'anti-horário', '-1': 'horário' };
+
 /** Os dois modos de punição para quem perde o desafio. */
 export const PUNISHMENT = { REVOLVER: 'revolver', POTIONS: 'potions' };
 export const POTION_COUNTS = [3, 5];
@@ -141,6 +150,8 @@ export class Game {
 
     this.phase = 'idle'; // idle | playing | reveal | punishment | roundEnd | gameOver
     this.round = 0;
+    /** +1 = anti-horário, -1 = horário. Inverte a cada rodada encerrada. */
+    this.direction = DIRECTION.CCW;
     this.tableCard = null;
     this.turn = 0;
     this.lastPlay = null; // { playerId, cards:[], count }
@@ -182,22 +193,40 @@ export class Game {
   }
 
   /**
-   * Próximo assento no sentido horário que satisfaz o filtro.
+   * Próximo assento no sentido atual da mesa que satisfaz o filtro.
    * Retorna -1 quando ninguém qualifica.
    */
-  nextSeat(fromSeat, predicate) {
-    for (let step = 1; step <= this.playerCount; step++) {
-      const seat = (fromSeat + step) % this.playerCount;
+  nextSeat(fromSeat, predicate, direction = this.direction) {
+    const count = this.playerCount;
+    for (let step = 1; step <= count; step++) {
+      const seat = (((fromSeat + step * direction) % count) + count) % count;
       if (predicate(this.players[seat])) return seat;
     }
     return -1;
+  }
+
+  /**
+   * Vira a mesa. Toda rodada encerrada inverte o rumo do jogo: quem estava
+   * prestes a ser desafiado passa a ser o desafiante da próxima rodada.
+   */
+  flipDirection() {
+    this.direction = -this.direction;
+    this.emit('direction:change', {
+      direction: this.direction,
+      label: DIRECTION_LABEL[this.direction],
+    });
+    return this.direction;
   }
 
   // ------------------------------------------------------------------ partida
 
   start() {
     this.phase = 'playing';
-    this.emit('game:start', { playerCount: this.playerCount, punishment: this.punishment });
+    this.emit('game:start', {
+      playerCount: this.playerCount,
+      punishment: this.punishment,
+      direction: this.direction,
+    });
     this.startRound(0);
   }
 
@@ -233,6 +262,7 @@ export class Game {
       tableCard: this.tableCard,
       turn: this.turn,
       startingPlayerId: this.players[this.turn].id,
+      direction: this.direction,
     });
   }
 
@@ -286,8 +316,10 @@ export class Game {
     const nextSeat = this.nextSeat(this.turn, (p) => p.alive && p.hand.length > 0);
 
     if (nextSeat === -1) {
-      // Todos ficaram sem cartas: rodada encerrada em paz.
+      // Todos ficaram sem cartas: rodada encerrada em paz — mas a mesa vira
+      // do mesmo jeito, porque a rodada acabou.
       this.emit('round:exhausted', {});
+      this.flipDirection();
       const starter = this.nextSeat(this.turn, (p) => p.alive);
       this.phase = 'roundEnd';
       this.nextRoundStart = starter === -1 ? this.turn : starter;
@@ -423,12 +455,19 @@ export class Game {
       return { ok: true, fatal, gameOver: true };
     }
 
-    // Quem sofreu a punição e sobreviveu recomeça; se morreu, passa adiante.
+    // A rodada acabou: a mesa vira antes de escolher quem abre a próxima.
+    this.flipDirection();
+
+    // Quem sofreu a punição e sobreviveu recomeça; se morreu, o rumo novo
+    // decide quem herda a abertura.
     this.nextRoundStart = player.alive
       ? player.seat
       : this.nextSeat(player.seat, (p) => p.alive);
     this.phase = 'roundEnd';
-    this.emit('round:end', { nextStarterId: this.players[this.nextRoundStart].id });
+    this.emit('round:end', {
+      nextStarterId: this.players[this.nextRoundStart].id,
+      direction: this.direction,
+    });
 
     return { ok: true, fatal, roundOver: true };
   }
@@ -451,6 +490,7 @@ export class Game {
     return {
       phase: this.phase,
       round: this.round,
+      direction: this.direction,
       tableCard: this.tableCard,
       turn: this.turn,
       turnPlayerId: this.players[this.turn]?.id ?? null,

@@ -440,6 +440,8 @@ function describe(event, game) {
         : `Clique... ${event.playerName} sobreviveu (câmara ${event.chamber}/${event.chambers}).`;
     case 'round:exhausted':
       return 'Acabaram as cartas sem ninguém desafiar. Rodada anulada.';
+    case 'direction:change':
+      return `A mesa virou! O jogo agora corre no sentido ${event.label}.`;
     case 'game:over':
       return `Fim de jogo! ${event.winnerName ?? 'Ninguém'} sobreviveu à mesa.`;
     default:

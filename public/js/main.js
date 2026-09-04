@@ -5,11 +5,12 @@
 
 import { World } from './world.js';
 import { sfx, setMuted, isMuted } from './audio.js';
-import { announceDrink, announceLiar, announcePlay, primeVoice, setVoiceEnabled, voiceAvailable } from './voice.js';
+import { announceDrink, announceLiar, announcePlay, announceReverse, primeVoice, setVoiceEnabled, voiceAvailable } from './voice.js';
 import {
-  $, addChat, addLog, claimText, escapeHtml, flashBang, hideCallOut, hidePunishPrompt, hideReveal,
-  hideRoulette, RANK_PLURAL, renderAvatarPicker, renderHand, renderLeaderboard, renderLobbySeats,
-  renderPlayers, resolveRoulette, showCallOut, showPunishPrompt, showReveal, showRoulette, toast,
+  $, addChat, addLog, claimText, escapeHtml, flashBang, hideCallOut, hideFlowCall, hidePunishPrompt,
+  hideReveal, hideRoulette, RANK_PLURAL, renderAvatarPicker, renderHand, renderLeaderboard,
+  renderLobbySeats, renderPlayers, resolveRoulette, setDirectionPill, showCallOut, showFlowCall,
+  showPunishPrompt, showReveal, showRoulette, toast,
 } from './ui.js';
 import { AVATAR_IDS } from './avatars.js';
 
@@ -38,6 +39,9 @@ const app = {
   createMode: 'revolver',
   createPotions: 5,
   worldSignature: null,
+  // Sentido que a tela está mostrando. Fica atrás do estado do servidor de
+  // propósito: a virada só aparece na hora certa da coreografia.
+  direction: null,
   voiceOn: true,
   timers: [],
 };
@@ -484,6 +488,8 @@ function renderGame() {
   $('#hud-round').textContent = state.round;
   $('#hud-theme-value').textContent = state.tableCard ? RANK_PLURAL[state.tableCard] : '—';
 
+  setDirectionPill(app.direction ?? state.direction ?? 1);
+
   const potions = isPotionsMode();
   const modePill = $('#hud-mode');
   modePill.textContent = potions ? `🧪 ${state.punishment.potionCount}` : '🔫 6';
@@ -535,6 +541,28 @@ function renderGame() {
     : 'Ninguém jogou ainda';
 }
 
+/**
+ * Aponta a tela inteira para o sentido novo.
+ * @param {number} direction +1 anti-horário, -1 horário
+ * @param {{announce?:boolean}} options — com anúncio, a mesa vira na cara do
+ *        jogador: setas girando, som, voz e cartaz no centro.
+ */
+function applyDirection(direction, { announce = false } = {}) {
+  const next = Number(direction) < 0 ? -1 : 1;
+  const changed = app.direction !== null && app.direction !== next;
+  app.direction = next;
+
+  setDirectionPill(next, { flash: announce && changed });
+  app.world?.setDirection(next, { animate: announce && changed });
+
+  if (announce && changed) {
+    showFlowCall(next);
+    sfx.reverse();
+    announceReverse();
+    app.world?.shake(0.06);
+  }
+}
+
 function toggleCard(cardId) {
   if (app.selected.has(cardId)) app.selected.delete(cardId);
   else app.selected.add(cardId);
@@ -572,14 +600,20 @@ function syncWorld(state) {
  */
 function playEvents(events) {
   let delay = 0;
+  let mode = null; // punição desta leva, para dar o tempo certo à virada
 
   for (const event of events) {
+    // A mesa só vira depois que a tela do revólver sai da frente — ela cobre
+    // tudo, e o cartaz da virada ficaria escondido atrás dela.
+    if (event.type === 'direction:change') delay += mode === 'revolver' ? 1600 : 250;
+
     schedule(delay, () => handleEvent(event));
 
     switch (event.type) {
       case 'challenge': delay += 700; break;
       case 'reveal': delay += 3400; break;
       case 'punishment:result':
+        mode = event.mode === 'potions' ? 'potions' : 'revolver';
         // No modo poções o resultado só aparece depois do gole e do suspense.
         delay += event.mode === 'potions' ? DRINK_MS + SUSPENSE_MS + 700 : 900;
         break;
@@ -593,8 +627,18 @@ function handleEvent(event) {
   const log = $('#log');
 
   switch (event.type) {
+    case 'direction:change': {
+      applyDirection(event.direction, { announce: true });
+      addLog(log, `A mesa virou! O jogo agora corre no sentido ${event.label}.`, 'round');
+      renderGame();
+      break;
+    }
+
     case 'round:start': {
       app.selected.clear();
+      // Rede de segurança: se a virada se perdeu no caminho, a rodada nova
+      // já começa com as setas no lugar certo.
+      applyDirection(event.direction ?? app.direction ?? 1);
       hideReveal();
       hideRoulette();
       hidePunishPrompt();
@@ -844,6 +888,9 @@ function initSocket() {
 
     showScreen('game');
     syncWorld(state);
+    // Entrando na partida (ou voltando de uma queda) as setas já nascem no
+    // rumo certo; daí em diante quem vira a mesa é o evento da coreografia.
+    if (app.direction === null) applyDirection(state.direction ?? 1);
     renderGame();
   });
 
@@ -885,10 +932,12 @@ function initSocket() {
     app.state = null;
     app.selected.clear();
     app.worldSignature = null;
+    app.direction = null;
     hideReveal();
     hideRoulette();
     hidePunishPrompt();
     hideCallOut();
+    hideFlowCall();
     app.world?.focusTray(null);
     app.world?.disablePotionPicking();
     app.world?.releaseAllDeaths();

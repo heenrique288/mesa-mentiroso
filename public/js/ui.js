@@ -215,6 +215,66 @@ export function hideCallOut() {
   $('#call-out').classList.add('hidden');
 }
 
+// ------------------------------------------------------- sentido da mesa
+
+/** +1 = anti-horário (o mesmo sentido dos assentos), -1 = horário. */
+export const DIRECTION_TEXT = {
+  '1': { icon: '↺', word: 'Anti-horário' },
+  '-1': { icon: '↻', word: 'Horário' },
+};
+
+export const directionText = (direction) => DIRECTION_TEXT[String(direction)] ?? DIRECTION_TEXT['1'];
+
+let flowTimer = null;
+let flowPillTimer = null;
+
+/**
+ * Atualiza a pílula do topo com o rumo atual da mesa.
+ * @param {number} direction
+ * @param {{flash?:boolean}} options — flash destaca a virada por um instante.
+ */
+export function setDirectionPill(direction, { flash = false } = {}) {
+  const pill = $('#hud-direction');
+  if (!pill) return;
+  const { icon, word } = directionText(direction);
+  pill.querySelector('.flow-icon').textContent = icon;
+  pill.querySelector('.flow-word').textContent = word;
+  pill.title = `A mesa corre no sentido ${word.toLowerCase()} — vira a cada rodada`;
+
+  if (!flash) return;
+  clearTimeout(flowPillTimer);
+  pill.classList.add('flipping');
+  flowPillTimer = setTimeout(() => pill.classList.remove('flipping'), 900);
+}
+
+/** Anúncio central: "A MESA VIROU" com a seta do novo sentido. */
+export function showFlowCall(direction) {
+  const el = $('#flow-call');
+  if (!el) return;
+  clearTimeout(flowTimer);
+
+  const { icon, word } = directionText(direction);
+  el.querySelector('.flow-glyph').textContent = icon;
+  el.querySelector('.flow-sub').textContent = `Agora no sentido ${word.toLowerCase()}`;
+  el.classList.toggle('cw', Number(direction) < 0);
+
+  el.classList.remove('hidden', 'leaving');
+  // Reinicia a animação mesmo se duas viradas vierem em sequência.
+  el.style.animation = 'none';
+  void el.offsetWidth;
+  el.style.animation = '';
+
+  flowTimer = setTimeout(() => {
+    el.classList.add('leaving');
+    flowTimer = setTimeout(() => el.classList.add('hidden'), 400);
+  }, 2100);
+}
+
+export function hideFlowCall() {
+  clearTimeout(flowTimer);
+  $('#flow-call')?.classList.add('hidden');
+}
+
 // -------------------------------------------------------- punição: poções
 
 /**

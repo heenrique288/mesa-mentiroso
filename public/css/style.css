@@ -324,6 +324,27 @@ input[type="text"]:focus { border-color: var(--amber); }
   color: var(--muted);
 }
 .pill b { color: var(--ink); letter-spacing: 0.18em; }
+
+/* Sentido da mesa: a seta acompanha o rumo e pisca quando o jogo vira. */
+.pill-flow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.pill-flow .flow-icon {
+  font-style: normal;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--amber);
+  transition: transform 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.pill-flow b { letter-spacing: 0.1em; }
+.pill-flow.flipping {
+  border-color: var(--amber);
+  box-shadow: 0 0 22px rgba(233, 180, 76, 0.4);
+}
+.pill-flow.flipping .flow-icon { transform: rotate(180deg) scale(1.25); }
 .pill-room b { color: var(--amber); font-family: "Consolas", monospace; }
 
 .theme-badge {
@@ -980,6 +1001,59 @@ input[type="email"]:focus { border-color: var(--amber); }
 }
 
 /* ======================================================================
+   A MESA VIROU — anúncio central da inversão do sentido
+   ====================================================================== */
+
+.flow-call {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 25;
+  pointer-events: none;
+  animation: call-pop 0.42s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+.flow-call.leaving { animation: call-leave 0.4s ease forwards; }
+
+.flow-call .flow-glyph {
+  font-size: 82px;
+  line-height: 1;
+  color: var(--amber);
+  text-shadow: 0 6px 26px rgba(0, 0, 0, 0.95), 0 0 46px rgba(233, 180, 76, 0.45);
+  animation: flow-spin 0.7s cubic-bezier(0.3, 1.2, 0.4, 1);
+}
+/* No sentido horário a seta gira para o outro lado ao entrar. */
+.flow-call.cw .flow-glyph { animation-name: flow-spin-cw; }
+
+.flow-call .flow-title {
+  font-size: 30px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #fff6e2;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.95);
+  margin-top: 4px;
+}
+.flow-call .flow-sub {
+  margin-top: 6px;
+  font-size: 15px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--amber-soft);
+  text-shadow: 0 2px 12px #000;
+}
+
+@keyframes flow-spin {
+  from { opacity: 0; transform: rotate(-200deg) scale(0.5); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes flow-spin-cw {
+  from { opacity: 0; transform: rotate(200deg) scale(0.5); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ======================================================================
    PUNIÇÃO POR POÇÃO — as bandejas ficam na mesa em 3D, aqui só o aviso.
    ====================================================================== */
 
@@ -1052,6 +1126,11 @@ input[type="email"]:focus { border-color: var(--amber); }
   .call-number { font-size: 62px; }
   .call-rank { font-size: 30px; }
   .call-out { top: 22%; }
+  .flow-call { top: 26%; }
+  .flow-call .flow-glyph { font-size: 58px; }
+  .flow-call .flow-title { font-size: 21px; }
+  .flow-call .flow-sub { font-size: 12px; }
+  .pill-flow .flow-word { display: none; } /* no celular fica só a seta */
   .punish-prompt { bottom: 190px; padding: 10px 18px; }
   .punish-title { font-size: 16px; }
   .action-divider { padding: 0; text-align: center; }

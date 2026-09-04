@@ -83,6 +83,9 @@ export class World {
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2(-2, -2); // fora da tela até o mouse mexer
     this.seats = []; // { playerId, group, plate, marker, angle, position }
+    this.flowGroup = null; // setas no feltro indicando o rumo da vez
+    this.flowArrows = [];
+    this.direction = 1; // +1 = anti-horário (assentos crescentes), -1 = horário
     this.clock = new THREE.Clock();
     this.mySeatIndex = 0;
     this.playerCount = 4;
@@ -234,6 +237,7 @@ export class World {
       disposeTree(seat.marker);
     }
     this.seats = [];
+    this.clearFlow();
     this.clearPile();
     this.clearTrays();
     this.heldDeaths.clear();
@@ -274,6 +278,98 @@ export class World {
 
       this.scene.add(group, marker);
       this.seats.push({ playerId: player.id, seat: player.seat, group, avatar, plate, marker, angle, position });
+    }
+
+    this.buildFlow();
+  }
+
+  // ------------------------------------------------------ sentido da mesa
+
+  clearFlow() {
+    if (!this.flowGroup) return;
+    this.scene.remove(this.flowGroup);
+    disposeTree(this.flowGroup);
+    this.flowGroup = null;
+    this.flowArrows = [];
+  }
+
+  /**
+   * Setas gravadas no feltro mostrando para onde a vez está andando. Cada uma
+   * fica no vão entre dois assentos (longe do anel que marca o turno) e dá
+   * meia-volta quando a mesa vira.
+   */
+  buildFlow() {
+    this.clearFlow();
+
+    this.flowGroup = new THREE.Group();
+    const radius = TABLE_RADIUS - 0.34;
+
+    for (let i = 0; i < this.playerCount; i++) {
+      const angle = ((i + 0.5) * Math.PI * 2) / this.playerCount;
+
+      // O pivô olha para o vizinho seguinte: girar 180° inverte a seta.
+      const pivot = new THREE.Group();
+      pivot.position.set(Math.sin(angle) * radius, TABLE_TOP + 0.007, Math.cos(angle) * radius);
+      pivot.rotation.y = angle + (this.direction === 1 ? 0 : Math.PI);
+
+      // Triângulo deitado no feltro, com a ponta no eixo X local.
+      const mesh = new THREE.Mesh(
+        new THREE.CircleGeometry(0.085, 3),
+        new THREE.MeshBasicMaterial({
+          color: 0xe9b44c,
+          transparent: true,
+          opacity: 0.3,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        }),
+      );
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.scale.set(1.7, 1, 1);
+      mesh.renderOrder = 2;
+
+      pivot.add(mesh);
+      this.flowGroup.add(pivot);
+      this.flowArrows.push({ pivot, mesh, angle, index: i });
+    }
+
+    this.scene.add(this.flowGroup);
+  }
+
+  /**
+   * Aponta as setas para o sentido atual.
+   * @param {number} direction +1 anti-horário, -1 horário
+   * @param {{animate?:boolean}} options — com animação, a mesa dá meia-volta.
+   */
+  setDirection(direction, { animate = true } = {}) {
+    const next = direction < 0 ? -1 : 1;
+    const changed = this.direction !== next;
+    this.direction = next;
+    if (!this.flowArrows.length) return;
+
+    for (const arrow of this.flowArrows) {
+      const target = arrow.angle + (next === 1 ? 0 : Math.PI);
+
+      if (!animate || !changed) {
+        arrow.pivot.rotation.y = target;
+        continue;
+      }
+
+      // Meia-volta no rumo novo, escalonada assento a assento: a virada
+      // corre pela mesa em vez de acontecer toda de uma vez.
+      const from = arrow.pivot.rotation.y;
+      const to = from + (next === -1 ? Math.PI : -Math.PI);
+      const stagger = arrow.index * 70;
+      setTimeout(() => {
+        // A mesa pode ter sido remontada durante a espera.
+        if (!this.flowArrows.includes(arrow)) return;
+        this.animate(520, easeInOutCubic, (t) => {
+          arrow.pivot.rotation.y = from + (to - from) * t;
+          arrow.flash = Math.sin(t * Math.PI);
+        }, () => {
+          arrow.pivot.rotation.y = target;
+          arrow.flash = 0;
+        });
+      }, stagger);
     }
   }
 
@@ -881,6 +977,14 @@ export class World {
         seat.marker.material.opacity = 0.55 + Math.sin(time * 4.2) * 0.3;
         seat.marker.scale.setScalar(1 + Math.sin(time * 4.2) * 0.07);
       }
+    }
+
+    // As setas do sentido acendem em sequência, como luzes correndo pela mesa
+    // no rumo em que a vez anda.
+    for (const arrow of this.flowArrows) {
+      const phase = time * 2.2 - arrow.index * this.direction * 0.9;
+      const pulse = 0.22 + (Math.sin(phase) * 0.5 + 0.5) * 0.42;
+      arrow.mesh.material.opacity = Math.min(1, pulse + (arrow.flash ?? 0) * 0.55);
     }
 
     // Neon piscando de leve
